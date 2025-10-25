@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Bug Fix Verification Test</title>
+</head>
+<body>
+    <h1>groupBySupplierAndTag Bug Fix Verification</h1>
+    <p>This test verifies the fix for a bug that incorrectly filtered historical cumulative transactions.</p>
+    <p>Check the browser console for test results and see the summary below.</p>
+    <div id="results" style="font-family: monospace; border: 1px solid #ccc; padding: 10px; margin-top: 10px;"></div>
+    <script>
+        const resultsDiv = document.getElementById('results');
+        const log = (message, isError = false) => {
+            console[isError ? 'error' : 'log'](message);
+            const p = document.createElement('p');
+            p.textContent = message;
+            p.style.color = isError ? '#D32F2F' : '#388E3C';
+            if (message.startsWith('---')) {
+                p.style.fontWeight = 'bold';
+                p.style.marginTop = '10px';
+            }
+            resultsDiv.appendChild(p);
+        };
+
+        log("--- Starting Bug Verification Test ---", false);
+
+        // --- Helper Function ---
+        const monthMap = { Aug: 8, Sep: 9 };
+        function getMonthNumber(monthName) {
+            if (typeof monthName !== 'string') return 0;
+            return monthMap[monthName.substring(0, 3)] || 0;
+        }
+
+        // --- Sample Data: Focuses directly on the bug ---
+        const sampleData = [
+            // This transaction was being incorrectly filtered out by the buggy logic
+            { 'Supplier Name': 'Supplier A', 'Type': 'Missing_2B_Cumulative', 'Month': 'Aug', 'Total GST': 100 },
+            // This transaction was being correctly included
+            { 'Supplier Name': 'Supplier A', 'Type': 'Missing_2B_Cumulative', 'Month': 'Sep', 'Total GST': 200 },
+        ];
+        log("Test Data: Two cumulative transactions for Supplier A, one in Aug (GST: 100) and one in Sep (GST: 200). Latest month is Sep.");
+
+
+        // --- Buggy Function (Original Version) ---
+        function groupBySupplierAndTag_BUGGY(data) {
+            if (!data || data.length === 0) return [];
+            let latestMonthNum = 0;
+            for (const r of data) { latestMonthNum = Math.max(latestMonthNum, getMonthNumber(r['Month'])); }
+
+            const g = {};
+            for (const r of data) {
+                const s = r['Supplier Name'] || 'Unknown';
+                const t = r['Type'] || 'Unknown';
+                const isCumulative = t.includes('_Cumulative');
+                const rowMonthNum = getMonthNumber(r['Month']);
+
+                // THE BUG: This line incorrectly filters out historical data.
+                if (isCumulative && rowMonthNum !== latestMonthNum) { continue; }
+
+                const key = `${s}|${t}`;
+                if (!g[key]) g[key] = { supplier: s, tag: t, totalGst: 0 };
+                g[key].totalGst += (r['Total GST'] || 0);
+            }
+            return Object.values(g);
+        }
+
+        // --- Fixed Function (Corrected Version) ---
+        function groupBySupplierAndTag_FIXED(data) {
+            if (!data || data.length === 0) return [];
+
+            const g = {};
+            for (const r of data) {
+                const s = r['Supplier Name'] || 'Unknown';
+                const t = r['Type'] || 'Unknown';
+                // BUG REMOVED
+                const key = `${s}|${t}`;
+                if (!g[key]) g[key] = { supplier: s, tag: t, totalGst: 0 };
+                g[key].totalGst += (r['Total GST'] || 0);
+            }
+            return Object.values(g);
+        }
+
+        // --- Test 1: Run BUGGY version and assert failure ---
+        log("\n--- Testing BUGGY Version ---");
+        const buggyResult = groupBySupplierAndTag_BUGGY(sampleData);
+        const buggyGst = buggyResult.find(r => r.tag === 'Missing_2B_Cumulative')?.totalGst || 0;
+
+        if (buggyGst === 200) {
+            log(`✅ PASS: Buggy version produced expected INCORRECT GST sum of ${buggyGst}. It failed to include the August transaction.`);
+        } else {
+            log(`❌ FAIL: Buggy version produced unexpected GST sum of ${buggyGst}. Expected 200.`, true);
+        }
+
+        // --- Test 2: Run FIXED version and assert success ---
+        log("\n--- Testing FIXED Version ---");
+        const fixedResult = groupBySupplierAndTag_FIXED(sampleData);
+        const fixedGst = fixedResult.find(r => r.tag === 'Missing_2B_Cumulative')?.totalGst || 0;
+
+        if (fixedGst === 300) {
+            log(`✅ PASS: Fixed version produced expected CORRECT GST sum of ${fixedGst}. It correctly included both transactions.`);
+        } else {
+            log(`❌ FAIL: Fixed version produced unexpected GST sum of ${fixedGst}. Expected 300.`, true);
+        }
+
+        log("\n--- Test Complete ---", false);
+    </script>
+</body>
+</html>
