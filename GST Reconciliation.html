@@ -859,7 +859,6 @@
                  });
 
                  // --- New Listener for Page 5 Uploader ---
-                 const booksFileUploader = document.getElementById('booksFileUploader');
                  if (booksFileUploader) {
                      booksFileUploader.addEventListener('change', handleBooksFile);
                  } else {
@@ -884,16 +883,6 @@
             }
 
         }); // End of DOMContentLoaded
-    } catch (globalError) { // Catch errors BEFORE DOMContentLoaded
-         console.error("Global script error (before DOMContentLoaded):", globalError);
-         alert(`Critical Error during script load: ${globalError.message}. Please refresh the page.`);
-         try { // Try manual fallback
-             const startupScreen = document.getElementById('startupScreen');
-             const loaderOverlay = document.getElementById('loader-overlay');
-             if (startupScreen) startupScreen.style.display = 'flex';
-             if (loaderOverlay) loaderOverlay.style.display = 'none';
-          } catch(e){}
-    }
     </script>
 
 </body>
