@@ -676,9 +676,11 @@
                      if (!modal || !title || !previewArea) return;
                      title.textContent = `Mailing List: ${category}`;
                      const itemsInCategory = Object.entries(mailingListAssignments).filter(([key, cat]) => cat === category).map(([key, cat]) => key);
-                     let previewData = allData.filter(row => { const key = `${row['Supplier Name']}|${row['Type']}`; return itemsInCategory.includes(key); });
+                     // BUG FIX: Use globally filtered data instead of allData
+                     let previewData = filteredData.filter(row => { const key = `${row['Supplier Name']}|${row['Type']}`; return itemsInCategory.includes(key); });
                      let latestMonthNum = 0;
-                     for (const r of allData) { latestMonthNum = Math.max(latestMonthNum, getMonthNumber(r['Month'])); }
+                     // BUG FIX: Calculate latest month from the filtered dataset
+                     for (const r of filteredData) { latestMonthNum = Math.max(latestMonthNum, getMonthNumber(r['Month'])); }
                      const resolvedDocs = new Set();
                      for (const r of previewData) { if (r['Type'] && (r['Type'].includes('NowUploaded') || r['Type'].includes('NowClaimed'))) { resolvedDocs.add(`${r['Supplier Name']}|${r['Document Number (2B)']}`); } }
                      previewData = previewData.filter(row => {
@@ -694,9 +696,11 @@
                      if (!currentMailingListCategory) return;
                      console.log("Exporting mailing list for:", currentMailingListCategory);
                      const itemsInCategory = Object.entries(mailingListAssignments).filter(([key, cat]) => cat === currentMailingListCategory).map(([key, cat]) => key);
-                     let previewData = allData.filter(row => { const key = `${row['Supplier Name']}|${row['Type']}`; return itemsInCategory.includes(key); });
+                     // BUG FIX: Use globally filtered data instead of allData
+                     let previewData = filteredData.filter(row => { const key = `${row['Supplier Name']}|${row['Type']}`; return itemsInCategory.includes(key); });
                      let latestMonthNum = 0;
-                     for (const r of allData) { latestMonthNum = Math.max(latestMonthNum, getMonthNumber(r['Month'])); }
+                     // BUG FIX: Calculate latest month from the filtered dataset
+                     for (const r of filteredData) { latestMonthNum = Math.max(latestMonthNum, getMonthNumber(r['Month'])); }
                      const resolvedDocs = new Set();
                      for (const r of previewData) { if (r['Type'] && (r['Type'].includes('NowUploaded') || r['Type'].includes('NowClaimed'))) { resolvedDocs.add(`${r['Supplier Name']}|${r['Document Number (2B)']}`); } }
                      previewData = previewData.filter(row => {
