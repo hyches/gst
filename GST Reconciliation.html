@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic GST Dashboard (User Choice)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Library to read Excel files (SheetJS) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        /* Basic Styles */
+        body { font-family: 'Inter', 'Segoe UI', sans-serif; }
+        .kpi-card { background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 1rem; }
+        .kpi-title { font-size: 0.8rem; color: #6b7280; font-weight: 500; }
+        .kpi-value { font-size: 1.8rem; font-weight: 700; color: #1f2937; }
+        .kpi-sub-value { font-size: 0.75rem; font-weight: 500; color: #9ca3af; }
+        .visual-container { background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 1rem; margin-bottom: 1rem; position: relative; }
+        .visual-title { font-size: 1rem; font-weight: 600; color: #374151; margin-bottom: 0.5rem; }
+        .page-tab { padding: 0.5rem 0.8rem; cursor: pointer; color: #4B5563; border-bottom: 2px solid transparent; font-weight: 500; margin-right: 0.25rem; }
+        .page-tab.active { color: #3B82F6; border-bottom: 2px solid #3B82F6; }
+        .page-content { display: none; padding-top: 1rem; }
+        .page-content.active { display: block; }
+        .slicer { background-color: #ffffff; border-radius: 6px; padding: 0.5rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .slicer-title { display: block; font-size: 0.75rem; font-weight: 600; color: #374151; margin-bottom: 0.25rem; }
+        .table-container { max-height: 500px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 4px; background-color: #ffffff; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .sticky-header th { position: sticky; top: 0; background-color: #f9fafb; z-index: 10; font-size: 0.75rem; padding: 0.5rem 0.75rem; }
+        td { font-size: 0.8rem; padding: 0.5rem 0.75rem; border-bottom: 1px solid #e5e7eb; }
+        th.sortable { cursor: pointer; } th.sortable:hover { background-color: #e5e7eb; }
+        th.sort-asc::after { content: ' ▲'; font-size: 0.6rem; } th.sort-desc::after { content: ' ▼'; font-size: 0.6rem; }
+        .spinner { border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 4px solid #fff; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 0 auto 0.5rem; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #error-message { position: fixed; top: 10px; right: 10px; background-color: #ef4444; color: white; padding: 0.8rem; border-radius: 0.3rem; z-index: 9999; display: none; max-width: 350px; font-size: 0.9rem; }
+        .action-select, .add-to-select { font-size: 0.75rem; padding: 2px 4px; border-radius: 4px; border: 1px solid #d1d5db; background-color: white; }
+
+        /* Simplified Visibility Control */
+        #loader-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.7); display: flex; align-items: center; justify-content: center; z-index: 9998; }
+        #loader-overlay, #dashboard { display: none; }
+        #startupScreen { display: flex; } /* Uploader visible by default */
+
+        /* Mailing List Modal */
+        #mailingListModal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0,0,0,0.5); z-index: 100; display: none; align-items: center; justify-content: center; padding: 1rem; }
+        #mailingListModalContent { background-color: white; padding: 1.5rem; border-radius: 8px; max-width: 90%; width: 1000px; max-height: 90vh; display: flex; flex-direction: column; }
+        #mailingListPreviewArea { flex-grow: 1; overflow-y: auto; margin-bottom: 1rem; border: 1px solid #ccc; padding: 0.5rem;}
+        #mailingListPreviewArea table { width: 100%; font-size: 0.8rem; border-collapse: collapse; }
+        #mailingListPreviewArea th, #mailingListPreviewArea td { padding: 4px 6px; border: 1px solid #ddd; text-align: left; }
+        #mailingListPreviewArea thead { position: sticky; top: -1px; background-color: #f1f1f1; z-index: 1;}
+        #mailingListPreviewArea tbody tr:nth-child(even) { background-color: #f9f9f9; }
+
+         /* Chatbot Sidebar */
+        #chatbotSidebar {
+            position: fixed; right: -350px; /* Initially hidden */
+            top: 0; bottom: 0; width: 350px;
+            background-color: white; box-shadow: -3px 0 10px rgba(0,0,0,0.1);
+            z-index: 150; transition: right 0.3s ease-in-out;
+            display: flex; flex-direction: column; padding: 1rem; border-left: 1px solid #e5e7eb;
+        }
+        #chatbotSidebar.open { right: 0; }
+        #chatMessages { flex-grow: 1; overflow-y: auto; border: 1px solid #eee; margin-bottom: 0.5rem; padding: 0.5rem; font-size: 0.9rem; background-color: #f9fafb; }
+        #chatInput { width: calc(100% - 60px); padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px 0 0 4px; }
+        #chatSendBtn { width: 60px; padding: 0.5rem; border: none; background-color: #3B82F6; color: white; cursor: pointer; border-radius: 0 4px 4px 0; }
+        #askMGSTBtn { position: fixed; bottom: 20px; right: 20px; background-color: #1d4ed8; color: white; padding: 0.75rem 1rem; border-radius: 50px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); cursor: pointer; z-index: 140; font-weight: 600; font-size: 0.9rem; transition: background-color 0.2s; }
+        #askMGSTBtn:hover { background-color: #2563eb; }
+         .message { margin-bottom: 0.75rem; padding: 0.6rem; border-radius: 8px; line-height: 1.4; max-width: 90%; }
+        .user-message { background-color: #dbeafe; margin-left: auto; text-align: right; }
+        .bot-message { background-color: #e5e7eb; margin-right: auto; }
+        .thinking-message { font-style: italic; color: #6b7280; }
+        .clear-button { background-color: #ef4444; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; cursor: pointer; font-size: 0.75rem; font-weight: 500; }
+        .clear-button:hover { background-color: #dc2626; }
+        /* Button styles for startup screen */
+        .btn { display: inline-block; padding: 0.6rem 1.2rem; border-radius: 6px; font-weight: 500; text-align: center; cursor: pointer; transition: background-color 0.2s; }
+        .btn-primary { background-color: #3b82f6; color: white; }
+        .btn-primary:hover { background-color: #2563eb; }
+        .btn-secondary { background-color: #6b7280; color: white; }
+        .btn-secondary:hover { background-color: #4b5563; }
+        .btn-danger { background-color: #ef4444; color: white; }
+        .btn-danger:hover { background-color: #dc2626; }
+
+
+        /* Print specific styles */
+         @media print {
+            body * { visibility: hidden; }
+            #mailingListPreviewArea, #mailingListPreviewArea * { visibility: visible; }
+            #mailingListPreviewArea { position: absolute; left: 0; top: 0; width: 100%; height: auto; max-height: none; overflow: visible; border: none; padding: 0; margin: 0; }
+            #mailingListPreviewArea table { width: 100%; border-collapse: collapse; font-size: 8pt; }
+            #mailingListPreviewArea thead { display: table-header-group; }
+            #mailingListPreviewArea th, #mailingListPreviewArea td { border: 1px solid #999; padding: 3px 5px; word-wrap: break-word; }
+            #mailingListPreviewArea th { background-color: #eee !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            #mailingListPreviewArea tbody tr:nth-child(even) { background-color: #f9f9f9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            #mailingListPreviewArea td, #mailingListPreviewArea th { white-space: normal !important; }
+             button, nav, header, main > *:not(#mailingListModal *), #askMGSTBtn, #chatbotSidebar, #error-message, #mailingListModalContent > *:not(#mailingListPreviewArea) { display: none !important; visibility: hidden !important; }
+             @page { size: A4 landscape; margin: 1cm; }
+         }
+
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen"> <!-- Removed state-loading -->
+
+    <!-- Error Message -->
+    <div id="error-message">
+        <h3 class="font-bold mb-1">Error!</h3>
+        <p id="error-text" class="text-sm">Something went wrong.</p>
+        <button onclick="document.getElementById('error-message').style.display='none'" class="mt-2 text-xs font-bold">&times; Close</button>
+    </div>
+    <!-- Loader Overlay (Hidden by default via CSS) -->
+     <div id="loader-overlay" style="display: none;">
+        <div class="text-center text-white">
+            <div class="spinner"></div>
+            <p id="loader-text" class="text-sm">Initializing...</p>
+        </div>
+     </div>
+    <!-- Uploader Section (Visible by default via CSS) -->
+     <div id="startupScreen" class="flex flex-col items-center justify-center min-h-screen p-4 text-center" style="display: flex;">
+         <div class="visual-container max-w-md w-full">
+             <svg class="mx-auto h-10 w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+            <h2 class="mt-3 text-lg font-semibold text-gray-800">GST Dashboard</h2>
+            <p class="mt-1 text-xs text-gray-600">Choose an option to begin.</p>
+            
+            <!-- Hidden file input, still linked to the label -->
+            <input type="file" id="fileUploader" class="hidden" accept=".xlsx, .xls">
+            
+            <div class="mt-6 flex flex-col gap-3">
+                 <!-- Label styled as a button -->
+                <label for="fileUploader" id="btnUploadNew" class="btn btn-primary">Upload New Excel File</label>
+                <!-- Actual buttons for other actions -->
+                <button id="btnLoadSaved" class="btn btn-secondary">Use Saved Data</button>
+                <button id="btnClearSaved" class="btn btn-danger text-xs">Clear Saved Data</button>
+            </div>
+            <p id="upload-status" class="mt-4 text-sm text-gray-500"></p>
+        </div>
+     </div>
+
+    <!-- Dashboard (Hidden by default via CSS) -->
+    <div id="dashboard" class="flex-col min-h-screen" style="display: none;"> <!-- Start hidden -->
+        <!-- Header -->
+        <header class="bg-white shadow-sm w-full p-2">
+             <div class="max-w-screen-2xl mx-auto flex flex-col md:flex-row justify-between items-center gap-2"> <!-- Wider max-width -->
+                <h1 class="text-lg font-bold text-gray-800 shrink-0">GST Reconciliation</h1>
+                <div class="flex flex-wrap justify-center md:justify-end gap-2 w-full items-center"> <!-- Added items-center -->
+                    <div class="slicer w-full sm:w-auto md:w-40"><label id="companyLabel" for="companySlicer" class="slicer-title">Company</label><select id="companySlicer" aria-labelledby="companyLabel" class="w-full p-1 border rounded bg-white text-xs"></select></div>
+                    <div class="slicer w-full sm:w-auto md:w-32"><label id="monthLabel" for="monthSlicer" class="slicer-title">Month</label><select id="monthSlicer" aria-labelledby="monthLabel" class="w-full p-1 border rounded bg-white text-xs"></select></div>
+                    <div class="slicer w-full sm:w-auto md:w-48"><label id="tagLabel" for="tagSlicer" class="slicer-title">Tag (Type)</label><select id="tagSlicer" aria-labelledby="tagLabel" class="w-full p-1 border rounded bg-white text-xs"></select></div>
+                    <!-- New Clear Button for Dashboard -->
+                    <button id="clearDataBtnHeader" class="clear-button px-3 py-1 ml-2">Clear & Upload New</button>
+                </div>
+            </div>
+        </header>
+        <!-- Page Navigation -->
+         <nav class="bg-white w-full shadow-sm border-b sticky top-0 z-20">
+             <div class="max-w-screen-2xl mx-auto flex justify-start px-2 text-sm"> <!-- Wider max-width -->
+                 <button id="tab1" class="page-tab active" onclick="showPage('page1', 'tab1')">KPIs</button>
+                 <button id="tab2" class="page-tab" onclick="showPage('page2', 'tab2')">Transactions</button>
+                 <button id="tab3" class="page-tab" onclick="showPage('page3', 'tab3')">Suppliers</button>
+                 <button id="tab4" class="page-tab" onclick="showPage('page4', 'tab4')">Mailing List</button> <!-- New Tab -->
+            </div>
+        </nav>
+        <!-- Main Content -->
+        <main class="flex-grow w-full max-w-screen-2xl mx-auto p-2 md:p-4"> <!-- Wider max-width -->
+            <!-- Page 1 -->
+             <div id="page1" class="page-content active space-y-4">
+                 <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 md:gap-4">
+                    <div class="kpi-card"><div class="kpi-title">Missing 2B Cum</div><div id="kpi-missing-2b-cum" class="kpi-value text-red-600">Rs. 0</div></div>
+                    <div class="kpi-card"><div class="kpi-title">Missing PR Cum</div><div id="kpi-missing-pr-cum" class="kpi-value text-yellow-600">Rs. 0</div></div>
+                    <div class="kpi-card"><div class="kpi-title">Missing 2B Claimed</div><div id="kpi-missing-2b-claimed" class="kpi-value text-blue-600">Rs. 0</div><div class="kpi-sub-value">(via NowUploaded)</div></div>
+                    <div class="kpi-card"><div class="kpi-title">Missing PR Claimed</div><div id="kpi-missing-pr-claimed" class="kpi-value text-blue-600">Rs. 0</div><div class="kpi-sub-value">(via NowClaimed)</div></div>
+                    <div class="kpi-card"><div class="kpi-title">Total Recovered</div><div id="kpi-recovered" class="kpi-value text-green-600">Rs. 0</div><div class="kpi-sub-value">(2B+PR Claimed)</div></div>
+                    <div class="kpi-card"><div class="kpi-title">Success Rate</div><div id="kpi-success-pct" class="kpi-value text-green-700">0 %</div><div class="kpi-sub-value">(Rec / (Miss+Rec))</div></div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="visual-container h-[300px] md:h-[400px]"><h2 class="visual-title">Missing vs. Recovered (Placeholder)</h2><div class="flex items-center justify-center h-full text-gray-400">Chart Area</div></div>
+                    <div class="visual-container h-[300px] md:h-[400px]"><h2 class="visual-title">Risk Category Breakdown (Placeholder)</h2><div class="flex items-center justify-center h-full text-gray-400">Chart Area</div></div>
+                </div>
+            </div>
+            <!-- Page 2 -->
+             <div id="page2" class="page-content">
+                <!-- Added visual-container back -->
+                <div class="visual-container w-full">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-2 gap-2">
+                        <h2 class="visual-title text-xl font-semibold text-gray-700">Transaction Drilldown</h2>
+                        <div class="flex gap-2">
+                             <button id="clearActionsBtn" class="clear-button px-3 py-1">Clear Actions</button>
+                             <button id="export-btn-page2" class="bg-green-500 text-white px-3 py-1 rounded text-xs font-semibold hover:bg-green-600">Export CSV</button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2 p-2 bg-gray-50 rounded">
+                         <input type="text" id="filter-supplier-page2" class="w-full p-1 border border-gray-300 rounded text-xs" placeholder="Filter Supplier..." list="supplier-list">
+                         <input type="text" id="filter-docnum-page2" class="w-full p-1 border border-gray-300 rounded text-xs" placeholder="Filter Doc Num..." list="docnum-list">
+                    </div>
+                    <p class="text-xs text-gray-500 mb-1" id="drilldown-row-count">Showing 0 rows.</p>
+                    <div id="drilldown-table-container" class="table-container bg-white border-none shadow-none rounded-none">
+                        <table class="w-full text-left table-auto">
+                            <thead class="sticky-header">
+                                <tr class="text-gray-700 uppercase bg-gray-50">
+                                    <th class="px-2 py-1 sortable" data-col="Supplier Name">Supplier</th>
+                                    <th class="px-2 py-1 sortable" data-col="Document Number (2B)">Doc Num</th>
+                                    <th class="px-2 py-1 sortable" data-col="Document Date (2B)">Doc Date</th>
+                                    <th class="px-2 py-1 sortable" data-col="Type">Tag</th>
+                                    <th class="px-2 py-1 sortable text-right" data-col="Sum of Taxable Value (2B)">Taxable</th>
+                                    <th class="px-2 py-1 sortable text-right" data-col="Total GST">Total GST</th>
+                                    <th class="px-2 py-1">Remarks</th>
+                                    <th class="px-2 py-1">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="drilldown-table-body"></tbody>
+                        </table>
+                    </div>
+                </div> <!-- End visual-container -->
+            </div>
+            <!-- Page 3 -->
+             <div id="page3" class="page-content">
+                  <!-- Added visual-container back -->
+                 <div class="visual-container w-full">
+                     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-2 gap-2">
+                        <h2 class="visual-title text-xl font-semibold text-gray-700">Top Affecting Suppliers by Tag</h2>
+                        <div class="flex gap-2">
+                             <button id="clearAssignmentsBtn" class="clear-button px-3 py-1">Clear Lists</button>
+                             <button id="export-btn-page3" class="bg-green-500 text-white px-3 py-1 rounded text-xs font-semibold hover:bg-green-600">Export CSV</button>
+                        </div>
+                    </div>
+                     <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2 p-2 bg-gray-50 rounded">
+                         <input type="text" id="filter-supplier-page3" class="w-full p-1 border border-gray-300 rounded text-xs" placeholder="Filter Supplier..." list="supplier-list">
+                     </div>
+                    <p class="text-xs text-gray-500 mb-1" id="supplier-row-count">Showing 0 groups.</p>
+                     <div id="supplier-analysis-table" class="table-container bg-white border-none shadow-none rounded-none">
+                        <table class="w-full text-left table-auto">
+                            <thead class="sticky-header">
+                                <tr class="text-gray-700 uppercase bg-gray-50">
+                                    <th class="px-2 py-1 sortable" data-col="supplier">Supplier</th>
+                                    <th class="px-2 py-1 sortable" data-col="tag">Tag</th>
+                                    <th class="px-2 py-1 sortable text-right" data-col="totalGst">Total GST</th>
+                                    <th class="px-2 py-1">Add To List</th> <!-- New Header -->
+                                </tr>
+                            </thead>
+                            <tbody id="supplier-analysis-body"></tbody>
+                        </table>
+                    </div>
+                </div> <!-- End visual-container -->
+            </div>
+             <!-- Page 4: Mailing List -->
+            <div id="page4" class="page-content space-y-4">
+                <div class="flex justify-between items-center">
+                    <h2 class="visual-title text-xl font-semibold text-gray-700">Mailing Lists</h2>
+                    <button id="clearAllMailingListsBtn" class="clear-button px-3 py-1">Clear All Lists</button>
+                </div>
+                <div class="visual-container">
+                    <h3 class="font-medium mb-2">Select a Category to View / Export:</h3>
+                    <div id="mailingListCategories" class="flex flex-wrap gap-2">
+                        <!-- Category links/buttons will be added here by JS -->
+                        <span class="text-sm text-gray-500">Upload data to see categories.</span>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- Mailing List Modal -->
+        <div id="mailingListModal" style="display: none;"> <!-- Start hidden -->
+            <div id="mailingListModalContent">
+                <h2 id="mailingListModalTitle" class="text-lg font-semibold mb-3">Category: [Category Name]</h2>
+                <div id="mailingListPreviewArea">
+                    <!-- Transaction table will be inserted here -->
+                     <p class="text-gray-500">Loading preview...</p>
+                </div>
+                <div class="flex justify-end gap-3 mt-4 pt-3 border-t">
+                     <button onclick="exportMailingList()" class="bg-green-500 text-white px-4 py-1.5 rounded text-sm hover:bg-green-600">Export CSV</button>
+                     <button onclick="printPreviewContent()" class="bg-gray-500 text-white px-4 py-1.5 rounded text-sm hover:bg-gray-600">Print</button>
+                     <button onclick="closeMailingListModal()" class="bg-red-500 text-white px-4 py-1.5 rounded text-sm hover:bg-red-600">Close</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chatbot Elements -->
+        <button id="askMGSTBtn" onclick="toggleChatbot()">Ask MGST</button>
+        <div id="chatbotSidebar">
+            <div class="flex justify-between items-center mb-2 border-b pb-2">
+                 <h3 class="font-semibold">MGST Assistant</h3>
+                 <button onclick="toggleChatbot()" class="text-gray-500 hover:text-gray-800 text-2xl leading-none">&times;</button>
+            </div>
+            <div id="chatMessages">
+                <div class="bot-message message">Hi! How can I help you filter the GST data? (e.g., "show ABC pvt ltd", "filter Sep", "details for XYZ traders")</div>
+            </div>
+            <div class="flex mt-auto">
+                <input type="text" id="chatInput" placeholder="Ask about the data..." onkeydown="if(event.key==='Enter') handleChatInput()">
+                <button id="chatSendBtn" onclick="handleChatInput()">Send</button>
+            </div>
+        </div>
+
+        <!-- Datalists for autocomplete -->
+        <datalist id="supplier-list"></datalist>
+        <datalist id="docnum-list"></datalist>
+
+    </div> <!-- End #dashboard -->
+
+
+    <script>
+        // Wrap entire script logic in a try-catch block
+        try {
+            document.addEventListener('DOMContentLoaded', () => {
+                // Wrap core initialization in try-catch
+                try {
+                    console.log("DOM loaded. Initializing script...");
+
+                    // --- Global State ---
+                    let allData = [];
+                    let filteredData = []; // Data after global slicers
+                    let actionState = {};
+                    let currentSortPage2 = { col: null, dir: null };
+                    let currentSortPage3 = { col: 'totalGst', dir: 'desc' };
+                    const MAX_ROWS_DISPLAY = 5000;
+                    let mailingListAssignments = {}; // { 'Supplier|Tag': 'CategoryName' }
+                    const mailingListCategories = ["Admin", "HR", "EA", "IT", "KS", "DC", "Investment"];
+                    let currentMailingListCategory = null; // Track category for modal
+                    const monthMap = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
+                    
+                    // --- IndexedDB State ---
+                    const DB_NAME = "GSTDashboardDB";
+                    const STORE_NAME = "transactions";
+                    const ACTIONS_STORE_NAME = "actions"; // Store for Page 2 actions
+                    const ASSIGNMENTS_STORE_NAME = "assignments"; // Store for Page 3 assignments
+                    let db = null; // IndexedDB database instance
+
+
+                    // --- Utility Functions (Define FIRST) ---
+                    function showLoader(text = "Loading...") { console.log("Showing loader:", text); const lo=document.getElementById('loader-overlay'); const lt=document.getElementById('loader-text'); if(lt) lt.innerText=text; if(lo) lo.style.display = 'flex'; }
+                    function hideLoader() { console.log("Hiding loader."); const lo=document.getElementById('loader-overlay'); if(lo) lo.style.display = 'none'; }
+                    function switchView(view) { console.log("Switching view to:", view); const startupScreen=document.getElementById('startupScreen'); const dd=document.getElementById('dashboard'); if(!startupScreen || !dd) { console.error("Cannot switch view - startup or dashboard div missing!"); return; } if (view === 'uploader') { startupScreen.style.display = 'flex'; dd.style.display = 'none'; } else { startupScreen.style.display = 'none'; dd.style.display = 'flex'; } hideLoader(); }
+                    function showError(message) { hideLoader(); const ed=document.getElementById('error-message'); const et=document.getElementById('error-text'); if (et) et.innerText=message; if (ed) ed.style.display='block'; console.error("Error:", message); try { switchView('uploader'); } catch(e){ console.error("Failed to switch view on error:", e);} }
+                    function hideError() { const ed=document.getElementById('error-message'); if (ed) ed.style.display='none'; }
+                    function parseCurrency(v) { if (typeof v==='number') return v; if (typeof v!=='string') return 0; const c=v.replace(/[^0-9.-]+/g,""); const n=parseFloat(c); return isNaN(n)?0:n; }
+                    function formatCurrency(n, u=true) { if (typeof n!=='number'||isNaN(n)) return u?'Rs. 0 K':'0.00'; if (!u) return n.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); if (Math.abs(n)>=1e7) return 'Rs. '+(n/1e7).toFixed(2)+' Cr'; if (Math.abs(n)>=1e5) return 'Rs. '+(n/1e5).toFixed(2)+' Lk'; if (Math.abs(n)>=1e3) return 'Rs. '+(n/1e3).toFixed(2)+' K'; return 'Rs. '+n.toFixed(2); }
+                    function formatPercent(n) { if (typeof n!=='number'||isNaN(n)) return '0.0 %'; return n.toFixed(1)+' %'; }
+                    function setKPIValue(id, v, p=false) { const e=document.getElementById(id); if (e) e.innerText = p?formatPercent(v):formatCurrency(v); else console.warn("KPI el missing:", id); }
+                    window.showPage = function(pId, tId) { try { document.querySelectorAll('.page-content').forEach(p=>p.classList.remove('active')); document.querySelectorAll('.page-tab').forEach(t=>t.classList.remove('active')); const pe=document.getElementById(pId); const te=document.getElementById(tId); if(pe) pe.classList.add('active'); else console.error("Page el missing:", pId); if(te) te.classList.add('active'); else console.error("Tab el missing:", tId); } catch(e){ showError("Page switch error."); console.error("showPage err:", e); } };
+                    function getMonthNumber(monthName) { if (typeof monthName !== 'string') return 0; const namePart = monthName.substring(0, 3); return monthMap[namePart] || 0; }
+
+                    // --- DOM Elements (Fetch AFTER defining utils) ---
+                    console.log("Getting essential DOM elements...");
+                    const startupScreen = document.getElementById('startupScreen'); // Renamed from uploaderDiv
+                    if (!startupScreen) throw new Error("Startup screen not found.");
+                    const dashboardDiv = document.getElementById('dashboard');
+                    if (!dashboardDiv) throw new Error("Dashboard div not found.");
+                    const fileInput = document.getElementById('fileUploader');
+                    if (!fileInput) throw new Error("File input (#fileUploader) not found.");
+                    const uploadStatus = document.getElementById('upload-status');
+                    if (!uploadStatus) throw new Error("Upload status element not found.");
+                    
+                    // --- New Button Elements ---
+                    const btnUploadNew = document.getElementById('btnUploadNew'); // This is the <label>
+                    if (!btnUploadNew) throw new Error("Upload New button/label not found.");
+                    const btnLoadSaved = document.getElementById('btnLoadSaved');
+                    if (!btnLoadSaved) throw new Error("Load Saved button not found.");
+                    const btnClearSaved = document.getElementById('btnClearSaved');
+                    if (!btnClearSaved) throw new Error("Clear Saved button not found.");
+                    const clearDataBtnHeader = document.getElementById('clearDataBtnHeader'); // Button in dashboard
+                    if (!clearDataBtnHeader) throw new Error("Clear Data Header button not found.");
+                    
+                    const companySlicer = document.getElementById('companySlicer');
+                    if (!companySlicer) throw new Error("Company slicer not found.");
+                    const monthSlicer = document.getElementById('monthSlicer');
+                    if (!monthSlicer) throw new Error("Month slicer not found.");
+                    const tagSlicer = document.getElementById('tagSlicer');
+                     if (!tagSlicer) throw new Error("Tag slicer not found.");
+                    const exportBtnPage2 = document.getElementById('export-btn-page2');
+                     if (!exportBtnPage2) throw new Error("Export button (Page 2) not found.");
+                    const exportBtnPage3 = document.getElementById('export-btn-page3');
+                     if (!exportBtnPage3) throw new Error("Export button (Page 3) not found.");
+                    const filterSupplierPage2 = document.getElementById('filter-supplier-page2');
+                     if (!filterSupplierPage2) throw new Error("Filter Supplier (Page 2) not found.");
+                    const filterDocNumPage2 = document.getElementById('filter-docnum-page2');
+                     if (!filterDocNumPage2) throw new Error("Filter DocNum (Page 2) not found.");
+                    const filterSupplierPage3 = document.getElementById('filter-supplier-page3');
+                    if (!filterSupplierPage3) throw new Error("Filter Supplier (Page 3) not found.");
+                    const drilldownTableBody = document.getElementById('drilldown-table-body');
+                    if (!drilldownTableBody) throw new Error("Drilldown table body not found.");
+                    const supplierAnalysisBody = document.getElementById('supplier-analysis-body');
+                    if (!supplierAnalysisBody) throw new Error("Supplier analysis body not found.");
+                    const loaderOverlay = document.getElementById('loader-overlay');
+                    if (!loaderOverlay) throw new Error("Loader overlay element not found.");
+                    const mailingListCategoriesDiv = document.getElementById('mailingListCategories');
+                    if (!mailingListCategoriesDiv) throw new Error("Mailing List Categories div missing.");
+                    const mailingListModal = document.getElementById('mailingListModal');
+                    if (!mailingListModal) throw new Error("Mailing List Modal missing.");
+                    const mailingListModalTitle = document.getElementById('mailingListModalTitle');
+                    if (!mailingListModalTitle) throw new Error("Mailing List Modal Title missing.");
+                    const mailingListPreviewArea = document.getElementById('mailingListPreviewArea');
+                     if (!mailingListPreviewArea) throw new Error("Mailing List Preview Area missing.");
+                     const chatbotSidebar = document.getElementById('chatbotSidebar');
+                     if (!chatbotSidebar) throw new Error("Chatbot Sidebar missing.");
+                     const chatMessages = document.getElementById('chatMessages');
+                     if (!chatMessages) throw new Error("Chat Messages div missing.");
+                     const chatInput = document.getElementById('chatInput');
+                     if (!chatInput) throw new Error("Chat Input missing.");
+                    const supplierDataList = document.getElementById('supplier-list');
+                    if (!supplierDataList) throw new Error("Supplier datalist missing.");
+                    const docNumDataList = document.getElementById('docnum-list');
+                    if (!docNumDataList) throw new Error("DocNum datalist missing.");
+                    // New Clear Buttons
+                    const clearActionsBtn = document.getElementById('clearActionsBtn');
+                    if (!clearActionsBtn) throw new Error("Clear Actions button missing.");
+                    const clearAssignmentsBtn = document.getElementById('clearAssignmentsBtn');
+                    if (!clearAssignmentsBtn) throw new Error("Clear Assignments button missing.");
+                    const clearAllMailingListsBtn = document.getElementById('clearAllMailingListsBtn');
+                    if (!clearAllMailingListsBtn) throw new Error("Clear All Mailing Lists button missing.");
+
+                    console.log("All essential elements found.");
+
+                    // --- IndexedDB Functions ---
+                    function openDB() {
+                        return new Promise((resolve, reject) => {
+                            const request = indexedDB.open(DB_NAME, 2); // Version 2 for new stores
+                            request.onupgradeneeded = (event) => {
+                                console.log("IndexedDB: Upgrade needed.");
+                                let db = event.target.result;
+                                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                                    db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                                    console.log("IndexedDB: Store 'transactions' created.");
+                                }
+                                if (!db.objectStoreNames.contains(ASSIGNMENTS_STORE_NAME)) {
+                                    db.createObjectStore(ASSIGNMENTS_STORE_NAME, { keyPath: 'key' });
+                                    console.log("IndexedDB: Store 'assignments' created.");
+                                }
+                                if (!db.objectStoreNames.contains(ACTIONS_STORE_NAME)) {
+                                    db.createObjectStore(ACTIONS_STORE_NAME, { keyPath: 'id' }); // Use row id as key
+                                    console.log("IndexedDB: Store 'actions' created.");
+                                }
+                            };
+                            request.onsuccess = (event) => {
+                                db = event.target.result;
+                                console.log("IndexedDB: Database opened successfully.");
+                                resolve(db);
+                            };
+                            request.onerror = (event) => {
+                                console.error("IndexedDB: Error opening database.", event.target.error);
+                                reject(event.target.error);
+                            };
+                        });
+                    }
+                    function loadDataFromDB(storeName) {
+                        return new Promise((resolve, reject) => {
+                            if (!db) { reject("DB not open"); return; }
+                            try {
+                                const transaction = db.transaction([storeName], 'readonly');
+                                const store = transaction.objectStore(storeName);
+                                const request = store.getAll();
+                                request.onsuccess = (event) => {
+                                    console.log(`IndexedDB: Data loaded from ${storeName}.`);
+                                    resolve(event.target.result);
+                                };
+                                request.onerror = (event) => {
+                                    console.error(`IndexedDB: Error loading data from ${storeName}.`, event.target.error);
+                                    reject(event.target.error);
+                                };
+                            } catch (e) { console.error(`IndexedDB: Error in loadDataFromDB tx: ${e}`); reject(e); }
+                        });
+                    }
+                    function saveDataToDB(storeName, data) {
+                        return new Promise((resolve, reject) => {
+                            if (!db) { reject("DB not open"); return; }
+                            const transaction = db.transaction([storeName], 'readwrite');
+                            const store = transaction.objectStore(storeName);
+                            const clearRequest = store.clear();
+                            clearRequest.onerror = (event) => reject(event.target.error);
+                            clearRequest.onsuccess = () => {
+                                console.log(`IndexedDB: Store ${storeName} cleared.`);
+                                if (!Array.isArray(data) || data.length === 0) {
+                                    console.log(`IndexedDB: No data provided for ${storeName}.`);
+                                    return resolve();
+                                }
+                                let addCount = 0;
+                                let errorCount = 0;
+                                const totalCount = data.length;
+
+                                if (totalCount === 0) return resolve();
+
+                                data.forEach(item => {
+                                    if (item === undefined || item === null) {
+                                        addCount++;
+                                        if (addCount === totalCount) {
+                                            console.log(`IndexedDB: All ${totalCount} items processed (with skips).`);
+                                            resolve();
+                                        }
+                                        return;
+                                    }
+                                    const addRequest = store.put(item); 
+                                    addRequest.onsuccess = () => {
+                                        addCount++;
+                                        if (addCount + errorCount === totalCount) {
+                                            console.log(`IndexedDB: All ${totalCount} items processed (${errorCount} errors).`);
+                                            resolve();
+                                        }
+                                    };
+                                    addRequest.onerror = (event) => {
+                                         errorCount++;
+                                         console.warn(`IndexedDB: Error adding/putting item to ${storeName}.`, event.target.error, item);
+                                         if (addCount + errorCount === totalCount) {
+                                            console.log(`IndexedDB: All ${totalCount} items processed (${errorCount} errors).`);
+                                            resolve();
+                                        }
+                                    };
+                                });
+                            };
+                        });
+                    }
+                    function saveAssignmentsToDB(assignments) {
+                         const dataArray = Object.entries(assignments).map(([key, value]) => ({ key, value }));
+                         return saveDataToDB(ASSIGNMENTS_STORE_NAME, dataArray);
+                    }
+                    function loadAssignmentsFromDB() {
+                        return new Promise((resolve, reject) => {
+                             loadDataFromDB(ASSIGNMENTS_STORE_NAME).then(dataArray => {
+                                 const assignments = {};
+                                 if (Array.isArray(dataArray)) {
+                                     dataArray.forEach(item => { assignments[item.key] = item.value; });
+                                 }
+                                 resolve(assignments);
+                             }).catch(reject);
+                        });
+                    }
+                    function saveActionsToDB(actions) {
+                         const dataArray = Object.entries(actions).map(([id, value]) => ({ id, value }));
+                         return saveDataToDB(ACTIONS_STORE_NAME, dataArray);
+                    }
+                     function loadActionsFromDB() {
+                        return new Promise((resolve, reject) => {
+                             loadDataFromDB(ACTIONS_STORE_NAME).then(dataArray => {
+                                 const actions = {};
+                                 if (Array.isArray(dataArray)) {
+                                     dataArray.forEach(item => { actions[item.id] = item.value; });
+                                 }
+                                 resolve(actions);
+                             }).catch(reject);
+                        });
+                    }
+                    function clearDataFromDB() {
+                         return new Promise(async (resolve, reject) => {
+                            try {
+                                if (!db) {
+                                     console.log("DB not open, opening to clear...");
+                                     await openDB(); // Ensure DB is open before clearing
+                                }
+                                await saveDataToDB(STORE_NAME, []); // Save empty array
+                                await saveDataToDB(ASSIGNMENTS_STORE_NAME, []); // Save empty array
+                                await saveDataToDB(ACTIONS_STORE_NAME, []); // Save empty array
+                                console.log("IndexedDB: All stores cleared.");
+                                resolve();
+                            } catch (error) {
+                                console.error("IndexedDB: Error clearing data.", error);
+                                reject(error);
+                            }
+                        });
+                    }
+
+
+                    // --- Core Data Processing ---
+                    function processUploadedData(rawData) { console.log("Processing", rawData.length, "rows..."); if (!Array.isArray(rawData)) throw new Error("Data invalid."); const p = rawData.map((row, index) => { try { if (typeof row !== 'object' || row === null) return null; const nr = { id: `row_${index}` }; Object.keys(row).forEach(key => { if (key && !key.startsWith('__EMPTY')) { nr[key.trim()] = row[key]; } }); const tv = nr['Type'] ?? nr['Tag (Type)']; nr['Type'] = tv ? String(tv).trim() : ""; nr['Sum of Taxable Value (2B)'] = parseCurrency(nr['Sum of Taxable Value (2B)']); nr['Sum of IGST (2B)'] = parseCurrency(nr['Sum of IGST (2B)']); nr['Sum of CGST (2B)'] = parseCurrency(nr['Sum of CGST (2B)']); nr['Sum of SGST (2B)'] = parseCurrency(nr['Sum of SGST (2B)']); nr['Total GST'] = (nr['Sum of IGST (2B)'] || 0) + (nr['Sum of CGST (2B)'] || 0) + (nr['Sum of SGST (2B)'] || 0); let dd = nr['Document Date (2B)']; if (dd instanceof Date) { nr['Document Date (2B)'] = dd.toLocaleDateString('en-IN', {day:'2-digit',month:'2-digit',year:'numeric'}); } else if (!(dd && typeof dd === 'string' && dd.match(/^\d{1,2}-\d{1,2}-\d{4}$/))) { nr['Document Date (2B)'] = ''; } nr['Remarks'] = nr['Remarks'] ? String(nr['Remarks']) : ''; nr['Supplier Name'] = nr['Supplier Name'] ? String(nr['Supplier Name']) : 'Unknown'; nr['Document Number (2B)'] = nr['Document Number (2B)'] ? String(nr['Document Number (2B)']) : ''; nr['Company Name'] = nr['Company Name'] ? String(nr['Company Name']) : 'Unknown'; nr['Month'] = nr['Month'] ? String(nr['Month']) : 'Unknown'; return nr; } catch (re) { console.error(`Err row ${index}:`, re, row); return null; } }).filter(r => r !== null); console.log("Processed:", p.length); return p; }
+                    async function handleFile(event) { // Made async
+                        console.log("File selected."); const file = event.target.files[0]; if (!file) return; showLoader("Reading file..."); uploadStatus.textContent="Reading..."; uploadStatus.classList.remove('text-red-600'); hideError(); if (typeof XLSX==='undefined') { showError("Excel lib failed."); return; } const reader = new FileReader(); reader.onload = async function(e) { // Made async
+                            try { showLoader("Processing data..."); console.log("Processing..."); const data=new Uint8Array(e.target.result); const wb=XLSX.read(data, {type:'array', cellDates:true}); const sn='Transactions'; if (!wb.SheetNames.includes(sn)) throw new Error(`Sheet "${sn}" missing.`); const ws=wb.Sheets[sn]; const rd=XLSX.utils.sheet_to_json(ws, {raw:false, defval:null}); if (!Array.isArray(rd) || rd.length === 0) throw new Error(`No data/invalid format.`); allData=processUploadedData(rd); actionState={}; mailingListAssignments = {}; console.log("Processed:", allData.length); if (allData.length > 0) { showLoader("Saving data to browser..."); if(!db) await openDB(); // Ensure DB is open
+                                await saveDataToDB(STORE_NAME, allData); await saveDataToDB(ACTIONS_STORE_NAME, []); await saveDataToDB(ASSIGNMENTS_STORE_NAME, []); console.log("Data saved to IndexedDB."); populateSlicers(allData); populateDatalists(allData); filterData(); renderMailingListCategories(); requestAnimationFrame(() => { switchView('dashboard'); console.log("Dashboard shown."); }); } else { throw new Error("No valid rows."); } } catch (error) { showError(`Processing Error: ${error.message}`); if (fileInput) fileInput.value=null; console.error("Proc err:", error);} }; reader.onerror = function(re) { showError("Error reading file."); if (fileInput) fileInput.value=null; console.error("Read err:", re);}; reader.readAsArrayBuffer(file);
+                    }
+                    function populateSlicers(data) { console.log("Populating global slicers..."); try { const cs=new Set(data.map(r=>r['Company Name']).filter(Boolean)); const ms=new Set(data.map(r=>r['Month']).filter(Boolean)); const ts=new Set(data.map(r=>r['Type']).filter(Boolean)); populateSelect(companySlicer, cs, 'All'); populateSelect(monthSlicer, ms, 'All'); populateSelect(tagSlicer, ts, 'All'); console.log("Global slicers populated."); } catch(e){ showError(`Filter setup error: ${e.message}`); console.error("Slicer err:", e); } }
+                    function populateSelect(selectEl, items, defaultOpt) { if(!selectEl){console.error("Select missing:", defaultOpt);return;} selectEl.innerHTML=`<option value="All">${defaultOpt}</option>`; [...items].sort().forEach(item=>{const o=document.createElement('option');o.textContent=item;o.value=item;selectEl.appendChild(o);}); }
+                    
+                    function populateDatalists(data) {
+                        console.log("Populating datalists...");
+                        try {
+                            const supplierSet = new Set(data.map(r => r['Supplier Name']).filter(Boolean));
+                            const docNumSet = new Set(data.map(r => r['Document Number (2B)']).filter(Boolean));
+                            
+                            supplierDataList.innerHTML = [...supplierSet].map(s => `<option value="${s.replace(/"/g, '&quot;')}"></option>`).join('');
+                            docNumDataList.innerHTML = [...docNumSet].map(d => `<option value="${String(d).replace(/"/g, '&quot;')}"></option>`).join('');
+                            console.log("Datalists populated.");
+                        } catch(e) {
+                             console.error("Error populating datalists:", e);
+                             showError(`Error setting up search: ${e.message}`);
+                        }
+                    }
+
+                    function filterData() { console.log("Filtering..."); try { const sc=companySlicer.value; const sm=monthSlicer.value; const st=tagSlicer.value; filteredData=allData.filter(r=>(sc==='All'||r['Company Name']===sc)&&(sm==='All'||r['Month']===sm)&&(st==='All'||r['Type']===st)); console.log("Filtered:", filteredData.length); populateDashboard(filteredData); } catch(e){ showError(`Filter update error: ${e.message}`); console.error("Filter err:", e); } }
+                    function sumByTagIncludes(d, p, e=[]) { let s=0; if(!d) return s; for(const r of d){const t=r['Type']; if(t && t.startsWith(p) && !e.some(ex=>t.includes(ex))) { s+=(r['Total GST']||0); } } return s;}
+                    function sumByTag(d, t) { let s=0; if(!d) return s; for(const r of d){if(r['Type']===t) s+=(r['Total GST']||0);} return s;}
+                    function populateDashboard(d) { console.log("Populating dashboard..."); try {
+                        const k1=sumByTagIncludes(d,'Missing_2B_',['NowUploaded']);
+                        const k2=sumByTagIncludes(d,'Missing_in_PR_',['NowClaimed']); // Exclude if "NowClaimed" is anywhere in the tag
+                        const k3=sumByTag(d,'Missing_2B_NowUploaded');
+                        const k4=sumByTagIncludes(d,'Missing_PR_NowClaimed');
+                        const tr=k3+k4; const tm=k1+k2; const den=tm+tr; const sp=(den>0)?(tr/den)*100:0;
+                        setKPIValue('kpi-missing-2b-cum',k1); setKPIValue('kpi-missing-pr-cum',k2); setKPIValue('kpi-missing-2b-claimed',k3); setKPIValue('kpi-missing-pr-claimed',k4); setKPIValue('kpi-recovered',tr); setKPIValue('kpi-success-pct',sp,true);
+                        console.log("KPIs done:", {k1, k2, k3, k4, tr, tm, sp}); // Log calculated values
+                        renderPage2Table(); renderPage3Table(); console.log("Tables done.");
+                    } catch (e) { showError(`Dashboard update error: ${e.message}`); console.error("Populate err:", e); } }
+                    let page2DataFilteredAndSorted = []; function renderPage2Table() { try { if(!drilldownTableBody) throw new Error("P2 body missing"); const sfInput = document.getElementById('filter-supplier-page2'); const dfInput = document.getElementById('filter-docnum-page2'); const sf=sfInput ? sfInput.value.toLowerCase() : ''; const df=dfInput ? dfInput.value.toLowerCase() : ''; let td=filteredData.filter(r=>(r['Supplier Name']||'').toLowerCase().includes(sf)&&(String(r['Document Number (2B)']||'')).toLowerCase().includes(df)); if(currentSortPage2.col) td.sort((a,b)=>sortTableData(a,b,currentSortPage2.col,currentSortPage2.dir)); page2DataFilteredAndSorted=td; const rc=td.length; const dl=MAX_ROWS_DISPLAY; document.getElementById('drilldown-row-count').innerText=`Showing ${Math.min(rc,dl)} of ${rc} rows.`; let rh=''; const ao=['None','Followed Up','Invoice Received','Followed up & Closed','No Response']; for(let i=0;i<Math.min(rc,dl);i++){const r=td[i]; const av=actionState[r.id]||'None'; const oh=ao.map(o=>`<option value="${o}" ${av===o?'selected':''}>${o==='None'?'-- Select --':o}</option>`).join(''); rh+=`<tr class="bg-white hover:bg-gray-50 text-xs"><td class="px-2 py-1 whitespace-nowrap">${r['Supplier Name']||''}</td><td class="px-2 py-1 whitespace-nowrap">${r['Document Number (2B)']||''}</td><td class="px-2 py-1 whitespace-nowrap">${r['Document Date (2B)']||''}</td><td class="px-2 py-1 whitespace-nowrap">${r['Type']||''}</td><td class="px-2 py-1 text-right">${formatCurrency(r['Sum of Taxable Value (2B)'],false)}</td><td class="px-2 py-1 text-right font-medium">${formatCurrency(r['Total GST'],false)}</td><td class="px-2 py-1 max-w-[150px] truncate" title="${r['Remarks']||''}">${r['Remarks']||''}</td><td class="px-2 py-1"><select data-id="${r.id}" class="action-select">${oh}</select></td></tr>`;} drilldownTableBody.innerHTML=rh; } catch(e){ showError(`P2 table error: ${e.message}`); console.error("Render P2 err:", e); } }
+                    let page3DataFilteredAndSorted = []; function renderPage3Table() { try { const supplierAnalysisBody = document.getElementById('supplier-analysis-body'); if(!supplierAnalysisBody) throw new Error("P3 body missing"); const sfin=document.getElementById('filter-supplier-page3'); const sf=sfin?sfin.value.toLowerCase():''; const gd=groupBySupplierAndTag(filteredData); let td=gd.filter(g=>(g.supplier||'').toLowerCase().includes(sf)); if(currentSortPage3.col) td.sort((a,b)=>sortTableData(a,b,currentSortPage3.col,currentSortPage3.dir)); page3DataFilteredAndSorted=td; const rc=td.length; const dl=MAX_ROWS_DISPLAY; document.getElementById('supplier-row-count').innerText=`Showing ${Math.min(rc,dl)} of ${rc} groups.`; let rh=''; const mlOptions = mailingListCategories.map(c => `<option value="${c}">${c}</option>`).join(''); for(let i=0;i<Math.min(rc,dl);i++){const r=td[i]; const assignmentKey=`${r.supplier}|${r.tag}`; const currentAssignment=mailingListAssignments[assignmentKey]||'None'; const selectOptions=`<option value="None">-- Select --</option>`+mailingListCategories.map(c=>`<option value="${c}" ${currentAssignment===c?'selected':''}>${c}</option>`).join(''); rh+=`<tr class="bg-white hover:bg-gray-50 text-xs"><td class="px-2 py-1 font-medium whitespace-nowrap">${r.supplier}</td><td class="px-2 py-1 whitespace-nowrap">${r.tag}</td><td class="px-2 py-1 text-right text-red-600 font-medium">${formatCurrency(r.totalGst,false)}</td><td class="px-2 py-1"><select class="add-to-select" data-supplier="${r.supplier.replace(/"/g, '&quot;')}" data-tag="${r.tag.replace(/"/g, '&quot;')}">${selectOptions}</select></td></tr>`;} supplierAnalysisBody.innerHTML=rh; } catch(e){ showError(`P3 table error: ${e.message}`); console.error("Render P3 err:", e); } }
+                    function groupBySupplierAndTag(data) {
+                        if (!data || data.length === 0) return [];
+                        console.log("Grouping suppliers for Page 3...");
+                        let latestMonthNum = 0;
+                        for (const r of data) { latestMonthNum = Math.max(latestMonthNum, getMonthNumber(r['Month'])); }
+                        console.log("Latest Month for Grouping:", latestMonthNum);
+                        const resolvedDocs = new Set();
+                        for (const r of data) { if (r['Type'] && (r['Type'].includes('NowUploaded') || r['Type'].includes('NowClaimed'))) { resolvedDocs.add(`${r['Supplier Name']}|${r['Document Number (2B)']}`); } }
+                        console.log(`Found ${resolvedDocs.size} resolved transactions.`);
+                        const g = {};
+                        for (const r of data) {
+                            const s = r['Supplier Name'] || 'Unknown';
+                            const t = r['Type'] || 'Unknown';
+                            const isCumulative = t.includes('_Cumulative');
+                            const rowMonthNum = getMonthNumber(r['Month']);
+                            const docKey = `${s}|${r['Document Number (2B)']}`;
+                            if (isCumulative && resolvedDocs.has(docKey)) { continue; }
+                            if (isCumulative && rowMonthNum !== latestMonthNum) { continue; }
+                            const key = `${s}|${t}`;
+                            if (!g[key]) g[key] = { supplier: s, tag: t, totalGst: 0 };
+                            g[key].totalGst += (r['Total GST'] || 0);
+                        }
+                        console.log("Grouping complete.");
+                        return Object.values(g);
+                    }
+                    function sortTableData(a, b, col, dir) { let vA=a[col]; let vB=b[col]; const m=dir==='asc'?1:-1; if(col==='Document Date (2B)'){const dA=parseDateString(vA); const dB=parseDateString(vB); if(dA&&dB) return (dA-dB)*m; return (dA?-1:dB?1:0)*m;} if(col==='Sum of Taxable Value (2B)'||col==='Total GST'||col==='totalGst'){vA=typeof vA==='number'?vA:parseCurrency(vA); vB=typeof vB==='number'?vB:parseCurrency(vB); return(vA-vB)*m;} if(typeof vA==='string') return (vA||'').localeCompare(vB||'')*m; return 0;}
+                    function parseDateString(ds) { if(!ds||typeof ds!=='string') return null; const p=ds.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/); return p?new Date(p[3],p[2]-1,p[1]):null;}
+                    function handleSortClick(ev) { try { const th=ev.target.closest('th.sortable'); if(!th) return; const tc=th.closest('.visual-container, .page-content'); if(!tc) return; const ip2=tc.querySelector('#drilldown-table-body')!==null; const cs=ip2?currentSortPage2:currentSortPage3; const cl=th.dataset.col; let nd=(cs.col===cl&&cs.dir==='asc')?'desc':'asc'; if(cs.col===cl&&cs.dir==='desc') nd=null; cs.col=nd?cl:null; cs.dir=nd; th.closest('thead').querySelectorAll('th.sortable').forEach(h=>{h.classList.remove('sort-asc','sort-desc'); if(h===th&&nd) h.classList.add(nd==='asc'?'sort-asc':'sort-desc');}); if(ip2) renderPage2Table(); else renderPage3Table(); } catch(e){ showError("Sort error."); console.error("Sort click err:", e); } }
+                    function exportToCsv(data, fName, cols) { console.log("Export CSV:", fName); if(typeof XLSX==='undefined'){showError("Core Excel lib missing.");return;} if(!Array.isArray(data)||data.length===0){showError("No data.");return;} showLoader("Exporting CSV..."); setTimeout(()=>{try{const ed=data.map(r=>{const nr={}; cols.forEach(c=>{let v=r[c.key]; if(typeof v==='string'){v=v.replace(/"/g,'""'); if(v.includes(',')||v.includes('\n')||v.includes('"')){v=`"${v}"`;}} else if(v===null||v===undefined){v='';} else {v=String(v); if(v.includes(',')){v=`"${v}"`;}} nr[c.header]=v;}); return nr;}); const ws=XLSX.utils.json_to_sheet(ed,{header:cols.map(c=>c.header)}); const csv=XLSX.utils.sheet_to_csv(ws); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const link=document.createElement("a"); if(link.download!==undefined){const url=URL.createObjectURL(blob); link.setAttribute("href",url); link.setAttribute("download",`${fName}_${new Date().toISOString().slice(0,10)}.csv`); link.style.visibility='hidden'; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);} else {showError("CSV download not supported.");} console.log("CSV Export OK.");} catch(e){showError(`CSV Export failed: ${e.message}`); console.error("CSV Export err:", e);} finally{hideLoader();}}, 50); }
+                    function renderMailingListCategories() { const div = document.getElementById('mailingListCategories'); if(div) div.innerHTML = mailingListCategories.map(cat => `<button onclick="showMailingListPreview('${cat}')" class="bg-blue-100 text-blue-700 px-3 py-1 rounded text-sm hover:bg-blue-200">${cat}</button>`).join(''); }
+                    async function handleAddToMailingList(supplier, tag, selectElement) { // Made async
+                        const category = selectElement.value;
+                        const key = `${supplier}|${tag}`;
+                        if (category === 'None') {
+                            delete mailingListAssignments[key];
+                            console.log(`Removed assignment for ${key}`);
+                        } else {
+                            mailingListAssignments[key] = category;
+                            console.log(`Assigned ${key} to ${category}`);
+                        }
+                        try { await saveAssignmentsToDB(mailingListAssignments); console.log("Assignments saved."); }
+                        catch (e) { console.error("Failed to save assignments:", e); showError("Failed to save mailing list assignment."); }
+                    }
+                    window.showMailingListPreview = function(category) {
+                         console.log("Showing preview for:", category);
+                         currentMailingListCategory = category;
+                         const modal = document.getElementById('mailingListModal');
+                         const title = document.getElementById('mailingListModalTitle');
+                         const previewArea = document.getElementById('mailingListPreviewArea');
+                         if (!modal || !title || !previewArea) return;
+                         title.textContent = `Mailing List: ${category}`;
+
+                         // 1. Get all assigned transactions
+                         const itemsInCategory = Object.entries(mailingListAssignments).filter(([key, cat]) => cat === category).map(([key, cat]) => key);
+                         let previewData = allData.filter(row => {
+                             const key = `${row['Supplier Name']}|${row['Type']}`;
+                             return itemsInCategory.includes(key);
+                         });
+
+                         // 2. Find latest month in ALL data
+                         let latestMonthNum = 0;
+                         for (const r of allData) { latestMonthNum = Math.max(latestMonthNum, getMonthNumber(r['Month'])); }
+
+                         // 3. Find all "resolved" docs within the category
+                         const resolvedDocs = new Set();
+                         for (const r of previewData) {
+                             if (r['Type'] && (r['Type'].includes('NowUploaded') || r['Type'].includes('NowClaimed'))) {
+                                 resolvedDocs.add(`${r['Supplier Name']}|${r['Document Number (2B)']}`);
+                             }
+                         }
+
+                         // 4. Apply both rules
+                         previewData = previewData.filter(row => {
+                             // Rule 1: Latest Month for Missing_in_PR_Current_Month
+                             if (row['Type'] === 'Missing_in_PR_Current_Month' && getMonthNumber(row['Month']) !== latestMonthNum) {
+                                 return false; // Exclude
+                             }
+                             // Rule 2: De-duplication for Cumulative
+                             const docKey = `${row['Supplier Name']}|${row['Document Number (2B)']}`;
+                             if (row['Type'].includes('_Cumulative') && resolvedDocs.has(docKey)) {
+                                 return false; // Exclude
+                             }
+                             return true; // Include
+                         });
+
+                         console.log("Filtered Preview Data:", previewData);
+                         let tableHTML = `<table class="w-full text-left table-auto border-collapse"><thead><tr class="bg-gray-100 text-xs uppercase"><th class="border p-1">Supplier</th><th class="border p-1">Doc Num</th><th class="border p-1">Doc Date</th><th class="border p-1">Tag</th><th class="border p-1 text-right">Taxable</th><th class="border p-1 text-right">Total GST</th><th class="border p-1">Remarks</th><th class="border p-1">Action</th></tr></thead><tbody>`;
+                         if (previewData.length > 0) {
+                             previewData.forEach(r => { tableHTML += `<tr class="text-xs"><td class="border p-1">${r['Supplier Name'] || ''}</td><td class="border p-1">${r['Document Number (2B)'] || ''}</td><td class="border p-1">${r['Document Date (2B)'] || ''}</td><td class="border p-1">${r['Type'] || ''}</td><td class="border p-1 text-right">${formatCurrency(r['Sum of Taxable Value (2B)'], false)}</td><td class="border p-1 text-right">${formatCurrency(r['Total GST'], false)}</td><td class="border p-1">${r['Remarks'] || ''}</td><td class="border p-1">${actionState[r.id] || 'None'}</td></tr>`; });
+                         } else { tableHTML += `<tr><td colspan="8" class="text-center p-4 text-gray-500">No items found matching the rules.</td></tr>`; }
+                         tableHTML += `</tbody></table>`;
+                         previewArea.innerHTML = tableHTML;
+                         modal.style.display = 'flex';
+                     }
+                    window.closeMailingListModal = function() { const modal = document.getElementById('mailingListModal'); if (modal) modal.style.display = 'none'; currentMailingListCategory = null; }
+                    window.printPreviewContent = function() { console.log("Attempting controlled print..."); try { window.print(); } catch(e){ showError("Print failed: " + e.message); console.error("Print error:", e); } }
+                    
+                    window.exportMailingList = function() {
+                         if (!currentMailingListCategory) return;
+                         console.log("Exporting mailing list for:", currentMailingListCategory);
+                         
+                         const itemsInCategory = Object.entries(mailingListAssignments).filter(([key, cat]) => cat === currentMailingListCategory).map(([key, cat]) => key);
+                         let previewData = allData.filter(row => { const key = `${row['Supplier Name']}|${row['Type']}`; return itemsInCategory.includes(key); });
+                         let latestMonthNum = 0;
+                         for (const r of allData) { latestMonthNum = Math.max(latestMonthNum, getMonthNumber(r['Month'])); }
+                         const resolvedDocs = new Set();
+                         for (const r of previewData) { if (r['Type'] && (r['Type'].includes('NowUploaded') || r['Type'].includes('NowClaimed'))) { resolvedDocs.add(`${r['Supplier Name']}|${r['Document Number (2B)']}`); } }
+                         previewData = previewData.filter(row => {
+                             if (row['Type'] === 'Missing_in_PR_Current_Month' && getMonthNumber(row['Month']) !== latestMonthNum) return false;
+                             const docKey = `${row['Supplier Name']}|${row['Document Number (2B)']}`;
+                             if (row['Type'].includes('_Cumulative') && resolvedDocs.has(docKey)) return false;
+                             return true;
+                         });
+                         if (previewData.length === 0) { showError("No data to export."); return; }
+                         const cols = [ { header: 'Supplier Name', key: 'Supplier Name' }, { header: 'Doc Number', key: 'Document Number (2B)' }, { header: 'Doc Date', key: 'Document Date (2B)' }, { header: 'Tag (Type)', key: 'Type' }, { header: 'Taxable Value', key: 'Sum of Taxable Value (2B)' }, { header: 'Total GST', key: 'Total GST' }, { header: 'Remarks', key: 'Remarks' }, { header: 'Action', key: 'Action' } ];
+                         const data = previewData.map(row => ({ ...row, 'Action': actionState[row.id] || 'None' }));
+                         exportToCsv(data, `Mailing_List_${currentMailingListCategory}`, cols);
+                    }
+                    
+                    // ** REMOVED draftMailingListEmail function **
+
+                    window.toggleChatbot = function() { const cb = document.getElementById('chatbotSidebar'); if (cb) cb.classList.toggle('open'); }
+                    window.handleChatInput = async function() { const ci = document.getElementById('chatInput'); const message = ci.value.trim(); if (!message) return; console.log("User:", message); addChatMessage(message, 'user'); ci.value = ''; addChatMessage("Thinking...", 'bot thinking-message'); await new Promise(resolve => setTimeout(resolve, 500)); try { const interpretation = simulateGeminiInterpretation(message); console.log("Simulated Interpretation:", interpretation); let botReply = ""; let applyFilter = false; if (interpretation.action === 'filter') { let changesMade = false; if (interpretation.company) { if(setSlicerValue(document.getElementById('companySlicer'), interpretation.company)) changesMade = true; } if (interpretation.month) { if(setSlicerValue(document.getElementById('monthSlicer'), interpretation.month)) changesMade = true; } if (interpretation.tag) { if(setSlicerValue(document.getElementById('tagSlicer'), interpretation.tag)) changesMade = true; } if (changesMade) { filterData(); applyFilter=true; botReply = `OK, filtered for ${interpretation.matchedText || 'your request'}. Check the Transactions tab.`; showPage('page2','tab2'); } else { botReply = "Couldn't apply filter. Check values."; } } else if (interpretation.action === 'details') { const detailData = allData.filter(r => (r['Supplier Name'] || '').toLowerCase().includes(interpretation.supplier.toLowerCase())); if (detailData.length > 0) { showDetailsPreview(detailData, `Details for ${interpretation.supplier}`); botReply = `OK, showing details for suppliers matching "${interpretation.supplier}".`; } else { botReply = `Sorry, no data for suppliers matching "${interpretation.supplier}".`; } } else { botReply = "Sorry, I can only filter by Company, Month, or Tag, or show supplier details. Try 'show ABC pvt ltd' or 'filter for Sep'."; } addChatMessage(botReply, 'bot'); } catch (e) { console.error("Chatbot error:", e); addChatMessage("Sorry, an error occurred.", 'bot'); } }
+                    function addChatMessage(text, sender) { const msgDiv = document.createElement('div'); msgDiv.classList.add('message', `${sender}-message`); msgDiv.textContent = text; const cm = document.getElementById('chatMessages'); if (cm) { const thinking = cm.querySelector('.thinking-message'); if (thinking) cm.removeChild(thinking); cm.appendChild(msgDiv); cm.scrollTop = cm.scrollHeight; } }
+                    function simulateGeminiInterpretation(msg) { const lower=msg.toLowerCase(); let interp={action:'unknown', matchedText:msg}; const companies=Array.from(document.getElementById('companySlicer').options).map(o=>o.value).filter(v=>v!=='All'); const months=Array.from(document.getElementById('monthSlicer').options).map(o=>o.value).filter(v=>v!=='All'); const tags=Array.from(document.getElementById('tagSlicer').options).map(o=>o.value).filter(v=>v!=='All'); interp.company = companies.find(c=>lower.includes(c.toLowerCase().substring(0,Math.min(c.length, 5)))) || null; interp.month = months.find(m=>lower.includes(m.toLowerCase())) || null; interp.tag = tags.find(t=>lower.includes(t.toLowerCase().replace(/_/g,' '))) || null; if(lower.startsWith("show details for")||lower.startsWith("details for")){const sGuess=msg.substring(msg.toLowerCase().indexOf("for")+4).trim(); if(sGuess){interp.action='details'; interp.supplier=sGuess; return interp;}} if(interp.company||interp.month||interp.tag){interp.action='filter'; let f=[interp.company,interp.month,interp.tag].filter(Boolean).join(', '); interp.matchedText=f;} return interp; }
+                    function setSlicerValue(slicer, valMatch) { if(!slicer||!valMatch) return false; const lowerM=valMatch.toLowerCase(); for(let i=0; i<slicer.options.length; i++){const optV=slicer.options[i].value; const optT=slicer.options[i].textContent; if(slicer.id==='companySlicer'){if(optV.toLowerCase().includes(lowerM)||optT.toLowerCase().includes(lowerM)){slicer.value=optV; console.log(`Chatbot set ${slicer.id}: ${optV}`); return true;}} else {if(optV.toLowerCase()===lowerM||optT.toLowerCase()===lowerM){slicer.value=optV; console.log(`Chatbot set ${slicer.id}: ${optV}`); return true;}}} console.warn(`Chatbot no match for "${valMatch}" in ${slicer.id}`); return false; }
+                    function showDetailsPreview(data, title) { currentMailingListCategory = title; const modal = document.getElementById('mailingListModal'); const modalTitle = document.getElementById('mailingListModalTitle'); const previewArea = document.getElementById('mailingListPreviewArea'); if (!modal||!modalTitle||!previewArea) return; modalTitle.textContent = title; let thtml = `<table class="w-full text-left table-auto border-collapse"><thead><tr class="bg-gray-100 text-xs uppercase"><th class="border p-1">Supplier</th><th class="border p-1">Doc Num</th><th class="border p-1">Doc Date</th><th class="border p-1">Tag</th><th class="border p-1 text-right">Taxable</th><th class="border p-1 text-right">Total GST</th><th class="border p-1">Remarks</th><th class="border p-1">Action</th></tr></thead><tbody>`; if (data.length > 0) { data.forEach(r => { thtml += `<tr class="text-xs"><td class="border p-1">${r['Supplier Name']||''}</td><td class="border p-1">${r['Document Number (2B)']||''}</td><td class="border p-1">${r['Document Date (2B)']||''}</td><td class="border p-1">${r['Type']||''}</td><td class="border p-1 text-right">${formatCurrency(r['Sum of Taxable Value (2B)'],false)}</td><td class="border p-1 text-right">${formatCurrency(r['Total GST'],false)}</td><td class="border p-1">${r['Remarks']||''}</td><td class="border p-1">${actionState[r.id]||'None'}</td></tr>`; }); } else { thtml += `<tr><td colspan="8" class="text-center p-4 text-gray-500">No data found.</td></tr>`; } thtml += `</tbody></table>`; previewArea.innerHTML = thtml; modal.style.display = 'flex'; }
+
+
+                    // --- Event Listeners Initialization ---
+                    console.log("Attaching event listeners...");
+                     if (!fileInput) throw new Error("File input missing!"); fileInput.addEventListener('change', handleFile);
+                     
+                     // --- New Startup Screen Listeners ---
+                     if (btnLoadSaved) {
+                         btnLoadSaved.addEventListener('click', async () => {
+                             console.log("Load Saved Data clicked.");
+                             showLoader("Loading saved data...");
+                             uploadStatus.textContent = "Loading saved data...";
+                             uploadStatus.classList.remove('text-red-600');
+                             try {
+                                 if (!db) db = await openDB(); // Ensure DB is open
+                                 const savedData = await loadDataFromDB(STORE_NAME);
+                                 if (savedData && savedData.length > 0) {
+                                     const savedAssignments = await loadAssignmentsFromDB();
+                                     const savedActions = await loadActionsFromDB();
+                                     allData = savedData;
+                                     mailingListAssignments = savedAssignments || {};
+                                     actionState = savedActions || {};
+                                     console.log("Loaded", allData.length, "rows from DB.");
+                                     populateSlicers(allData);
+                                     populateDatalists(allData);
+                                     filterData();
+                                     renderMailingListCategories();
+                                     requestAnimationFrame(() => {
+                                         switchView('dashboard');
+                                     });
+                                     console.log("Dashboard loaded from saved data.");
+                                 } else {
+                                     console.log("No saved data found.");
+                                     uploadStatus.textContent = "No saved data found. Please upload a file.";
+                                     hideLoader();
+                                 }
+                             } catch (error) {
+                                 showError(`Could not load saved data: ${error.message}`);
+                                 uploadStatus.textContent = `Error: ${error.message}`;
+                                 uploadStatus.classList.add('text-red-600');
+                             }
+                         });
+                     } else console.warn("Load Saved button missing.");
+                     
+                     if (btnClearSaved) {
+                         btnClearSaved.addEventListener('click', async () => {
+                             console.log("Clear Saved Data clicked.");
+                             if (confirm("Are you sure you want to clear all saved data? This cannot be undone.")) {
+                                 showLoader("Clearing saved data...");
+                                 try {
+                                     if (!db) db = await openDB(); // Ensure DB is open
+                                     await clearDataFromDB();
+                                     allData = []; filteredData = []; actionState = {}; mailingListAssignments = {};
+                                     uploadStatus.textContent = "Saved data cleared.";
+                                 } catch (error) {
+                                     showError(`Failed to clear data: ${error.message}`);
+                                     uploadStatus.textContent = `Error: ${error.message}`;
+                                     uploadStatus.classList.add('text-red-600');
+                                 } finally {
+                                     hideLoader();
+                                 }
+                             }
+                         });
+                     } else console.warn("Clear Saved button missing.");
+
+
+                     if (companySlicer) companySlicer.addEventListener('change', filterData); else console.warn("Company slicer missing.");
+                     if (monthSlicer) monthSlicer.addEventListener('change', filterData); else console.warn("Month slicer missing.");
+                     if (tagSlicer) tagSlicer.addEventListener('change', filterData); else console.warn("Tag slicer missing.");
+                     if (filterSupplierPage2) filterSupplierPage2.addEventListener('input', renderPage2Table); else console.warn("Filter Supplier P2 missing.");
+                     if (filterDocNumPage2) filterDocNumPage2.addEventListener('input', renderPage2Table); else console.warn("Filter DocNum P2 missing.");
+                     if (filterSupplierPage3) filterSupplierPage3.addEventListener('input', renderPage3Table); else console.warn("Filter Supplier P3 missing.");
+                     
+                     const mainContent = document.querySelector('main'); if (!mainContent) throw new Error("Main content missing!");
+                     mainContent.addEventListener('change', async (e) => { // Made async
+                         if (e.target.classList.contains('action-select')) {
+                             actionState[e.target.dataset.id] = e.target.value;
+                             console.log("Action updated:", e.target.dataset.id, e.target.value);
+                             if (db) await saveActionsToDB(actionState); // Save actions
+                         }
+                         else if (e.target.classList.contains('add-to-select')) {
+                             await handleAddToMailingList(e.target.dataset.supplier, e.target.dataset.tag, e.target); // Save assignments
+                         }
+                      });
+                     mainContent.addEventListener('click', handleSortClick); // Sorting
+                     
+                     if (exportBtnPage2) exportBtnPage2.addEventListener('click', () => { const cols = [ { header: 'Supplier Name', key: 'Supplier Name' }, { header: 'Doc Number', key: 'Document Number (2B)' }, { header: 'Doc Date', key: 'Document Date (2B)' }, { header: 'Tag (Type)', key: 'Type' }, { header: 'Taxable Value', key: 'Sum of Taxable Value (2B)' }, { header: 'Total GST', key: 'Total GST' }, { header: 'Remarks', key: 'Remarks' }, { header: 'Action', key: 'Action' } ]; const data = page2DataFilteredAndSorted.map(row => ({ ...row, 'Action': actionState[row.id] || 'None' })); exportToCsv(data, 'Transaction_Report', cols); }); else console.warn("Export P2 missing.");
+                     if (exportBtnPage3) exportBtnPage3.addEventListener('click', () => { const cols = [ { header: 'Supplier Name', key: 'supplier' }, { header: 'Tag (Type)', key: 'tag' }, { header: 'Total GST', key: 'totalGst' } ]; exportToCsv(page3DataFilteredAndSorted, 'Supplier_Analysis', cols); }); else console.warn("Export P3 missing.");
+                     
+                     // --- New Clear Button Listeners ---
+                     if(clearActionsBtn) clearActionsBtn.addEventListener('click', async () => {
+                         if (confirm("Clear all 'Action' selections on this page? This cannot be undone.")) {
+                             showLoader("Clearing actions...");
+                             actionState = {}; // Clear local state
+                             if(db) await saveActionsToDB(actionState); // Clear in DB
+                             renderPage2Table(); // Re-render table
+                             hideLoader();
+                         }
+                     });
+                     if(clearAssignmentsBtn) clearAssignmentsBtn.addEventListener('click', async () => {
+                         if (confirm("Clear all 'Add to List' selections on this page? This cannot be undone.")) {
+                             showLoader("Clearing assignments...");
+                             mailingListAssignments = {}; // Clear local state
+                             if(db) await saveAssignmentsToDB(mailingListAssignments); // Clear in DB
+                             renderPage3Table(); // Re-render table
+                             hideLoader();
+                         }
+                     });
+                     if(clearAllMailingListsBtn) clearAllMailingListsBtn.addEventListener('click', async () => {
+                         if (confirm("Are you sure you want to clear ALL mailing list assignments? This cannot be undone.")) {
+                             showLoader("Clearing all lists...");
+                             mailingListAssignments = {}; // Clear local state
+                             if(db) await saveAssignmentsToDB(mailingListAssignments); // Clear in DB
+                             renderPage3Table(); // Re-render page 3 to show cleared dropdowns
+                             hideLoader();
+                         }
+                     });
+                     
+                     // Clear Data Button (from Dashboard Header) Listener
+                     if (clearDataBtnHeader) clearDataBtnHeader.addEventListener('click', async () => {
+                         console.log("Clear data button clicked.");
+                         if (confirm("Are you sure you want to clear all saved data? You will need to re-upload your file.")) {
+                             showLoader("Clearing saved data...");
+                             try {
+                                 if(!db) db = await openDB();
+                                 await clearDataFromDB();
+                                 allData = []; filteredData = []; actionState = {}; mailingListAssignments = {};
+                                 switchView('uploader');
+                                 uploadStatus.textContent = "Saved data cleared. Please upload a new file.";
+                             } catch (error) { showError(`Failed to clear data: ${error.message}`); }
+                         }
+                     });
+
+                    // Initial setup for Mailing List categories
+                    renderMailingListCategories();
+                    console.log("Event listeners attached.");
+                    
+                    // --- Initial Load Logic ---
+                    // ** Replaced automatic check with just showing the uploader **
+                    console.log("Setting initial UI state...");
+                    switchView('uploader'); // Start on the uploader/startup screen
+                    hideLoader(); // Ensure loader is hidden
+                    console.log("Initialization complete. Ready for user action.");
+
+
+                } catch (initError) { // Catch errors during DOMContentLoaded setup
+                    console.error("Error during initialization inside DOMContentLoaded:", initError);
+                    showError(`Initialization failed: ${initError.message}. Please refresh.`);
+                     try { switchView('uploader'); } catch(e){} // Attempt to show uploader even on error
+                }
+
+            }); // End of DOMContentLoaded
+        } catch (globalError) { // Catch errors BEFORE DOMContentLoaded
+             console.error("Global script error (before DOMContentLoaded):", globalError);
+             alert(`Critical Error during script load: ${globalError.message}. Please refresh the page.`);
+             try { // Try manual fallback
+                 document.getElementById('uploader').style.display = 'flex';
+                 document.getElementById('loader-overlay').style.display = 'none';
+              } catch(e){}
+        }
+    </script>
+
+</body>
+</html>
+
