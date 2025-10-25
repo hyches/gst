@@ -306,6 +306,7 @@
 
 
     <script>
+        try {
         // --- Global State ---
         let allData = [];
         let filteredData = [];
@@ -886,6 +887,16 @@
             }
 
         }); // End of DOMContentLoaded
+    } catch (globalError) { // Catch errors BEFORE DOMContentLoaded
+         console.error("Global script error (before DOMContentLoaded):", globalError);
+         alert(`Critical Error during script load: ${globalError.message}. Please refresh the page.`);
+         try { // Try manual fallback
+             const startupScreen = document.getElementById('startupScreen');
+             const loaderOverlay = document.getElementById('loader-overlay');
+             if (startupScreen) startupScreen.style.display = 'flex';
+             if (loaderOverlay) loaderOverlay.style.display = 'none';
+          } catch(e){}
+    }
     } catch (globalError) { // Catch errors BEFORE DOMContentLoaded
          console.error("Global script error (before DOMContentLoaded):", globalError);
          alert(`Critical Error during script load: ${globalError.message}. Please refresh the page.`);

@@ -65,19 +65,29 @@
             return Object.values(g);
         }
 
-        // --- Fixed Function (Corrected Version) ---
+        // --- Fixed Function (Corrected Version from Application) ---
         function groupBySupplierAndTag_FIXED(data) {
             if (!data || data.length === 0) return [];
-
+            console.log("Grouping suppliers for Page 3...");
+            let latestMonthNum = 0;
+            for (const r of data) { latestMonthNum = Math.max(latestMonthNum, getMonthNumber(r['Month'])); }
+            console.log("Latest Month for Grouping:", latestMonthNum);
+            const resolvedDocs = new Set();
+            for (const r of data) { if (r['Type'] && (r['Type'].includes('NowUploaded') || r['Type'].includes('NowClaimed'))) { resolvedDocs.add(`${r['Supplier Name']}|${r['Document Number (2B)']}`); } }
+            console.log(`Found ${resolvedDocs.size} resolved transactions.`);
             const g = {};
             for (const r of data) {
                 const s = r['Supplier Name'] || 'Unknown';
                 const t = r['Type'] || 'Unknown';
-                // BUG REMOVED
+                const isCumulative = t.includes('_Cumulative');
+                const rowMonthNum = getMonthNumber(r['Month']);
+                const docKey = `${s}|${r['Document Number (2B)']}`;
+                if (isCumulative && resolvedDocs.has(docKey)) { continue; }
                 const key = `${s}|${t}`;
                 if (!g[key]) g[key] = { supplier: s, tag: t, totalGst: 0 };
                 g[key].totalGst += (r['Total GST'] || 0);
             }
+            console.log("Grouping complete.");
             return Object.values(g);
         }
 
