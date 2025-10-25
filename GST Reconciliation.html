@@ -306,7 +306,6 @@
 
 
     <script>
-        try {
         // --- Global State ---
         let allData = [];
         let filteredData = [];
@@ -718,8 +717,6 @@
                 function setSlicerValue(slicer, valMatch) { if(!slicer||!valMatch) return false; const lowerM=valMatch.toLowerCase(); for(let i=0; i<slicer.options.length; i++){const optV=slicer.options[i].value; const optT=slicer.options[i].textContent; if(slicer.id==='companySlicer'){if(optV.toLowerCase().includes(lowerM)||optT.toLowerCase().includes(lowerM)){slicer.value=optV; console.log(`Chatbot set ${slicer.id}: ${optV}`); return true;}} else {if(optV.toLowerCase()===lowerM||optT.toLowerCase()===lowerM){slicer.value=optV; console.log(`Chatbot set ${slicer.id}: ${optV}`); return true;}}} console.warn(`Chatbot no match for "${valMatch}" in ${slicer.id}`); return false; }
                 function showDetailsPreview(data, title) { currentMailingListCategory = title; const modal = document.getElementById('mailingListModal'); const modalTitle = document.getElementById('mailingListModalTitle'); const previewArea = document.getElementById('mailingListPreviewArea'); if (!modal||!modalTitle||!previewArea) return; modalTitle.textContent = title; let thtml = `<table class="w-full text-left table-auto border-collapse"><thead><tr class="bg-gray-100 text-xs uppercase"><th class="border p-1">Supplier</th><th class="border p-1">Doc Num</th><th class="border p-1">Doc Date</th><th class="border p-1">Tag</th><th class="border p-1 text-right">Taxable</th><th class="border p-1 text-right">Total GST</th><th class="border p-1">Remarks</th><th class="border p-1">Action</th></tr></thead><tbody>`; if (data.length > 0) { data.forEach(r => { thtml += `<tr class="text-xs"><td class="border p-1">${r['Supplier Name']||''}</td><td class="border p-1">${r['Document Number (2B)']||''}</td><td class="border p-1">${r['Document Date (2B)']||''}</td><td class="border p-1">${r['Type']||''}</td><td class="border p-1 text-right">${formatCurrency(r['Sum of Taxable Value (2B)'],false)}</td><td class="border p-1 text-right">${formatCurrency(r['Total GST'],false)}</td><td class="border p-1">${r['Remarks']||''}</td><td class="border p-1">${actionState[r.id]||'None'}</td></tr>`; }); } else { thtml += `<tr><td colspan="8" class="text-center p-4 text-gray-500">No data found.</td></tr>`; } thtml += `</tbody></table>`; previewArea.innerHTML = thtml; modal.style.display = 'flex'; }
 
-
-
                 // --- Event Listeners Initialization ---
                 console.log("Attaching event listeners...");
                  if (!fileInput) throw new Error("File input missing!"); fileInput.addEventListener('change', handleFile);
@@ -887,16 +884,6 @@
             }
 
         }); // End of DOMContentLoaded
-    } catch (globalError) { // Catch errors BEFORE DOMContentLoaded
-         console.error("Global script error (before DOMContentLoaded):", globalError);
-         alert(`Critical Error during script load: ${globalError.message}. Please refresh the page.`);
-         try { // Try manual fallback
-             const startupScreen = document.getElementById('startupScreen');
-             const loaderOverlay = document.getElementById('loader-overlay');
-             if (startupScreen) startupScreen.style.display = 'flex';
-             if (loaderOverlay) loaderOverlay.style.display = 'none';
-          } catch(e){}
-    }
     } catch (globalError) { // Catch errors BEFORE DOMContentLoaded
          console.error("Global script error (before DOMContentLoaded):", globalError);
          alert(`Critical Error during script load: ${globalError.message}. Please refresh the page.`);
