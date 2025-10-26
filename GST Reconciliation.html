@@ -114,10 +114,10 @@
              <svg class="mx-auto h-10 w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
             <h2 class="mt-3 text-lg font-semibold text-gray-800">GST Dashboard</h2>
             <p class="mt-1 text-xs text-gray-600">Choose an option to begin.</p>
-            
+
             <!-- Hidden file input, still linked to the label -->
             <input type="file" id="fileUploader" class="hidden" accept=".xlsx, .xls">
-            
+
             <div class="mt-6 flex flex-col gap-3">
                  <!-- Label styled as a button -->
                 <label for="fileUploader" id="btnUploadNew" class="btn btn-primary">Upload New Excel File</label>
@@ -137,6 +137,7 @@
                 <h1 class="text-lg font-bold text-gray-800 shrink-0">GST Reconciliation</h1>
                 <div class="flex flex-wrap justify-center md:justify-end gap-2 w-full items-center"> <!-- Added items-center -->
                     <div class="slicer w-full sm:w-auto md:w-40"><label id="companyLabel" for="companySlicer" class="slicer-title">Company</label><select id="companySlicer" aria-labelledby="companyLabel" class="w-full p-1 border rounded bg-white text-xs"></select></div>
+                    <div class="slicer w-full sm:w-auto md:w-28"><label id="fyLabel" for="fySlicer" class="slicer-title">FY</label><select id="fySlicer" aria-labelledby="fyLabel" class="w-full p-1 border rounded bg-white text-xs"></select></div>
                     <div class="slicer w-full sm:w-auto md:w-32"><label id="monthLabel" for="monthSlicer" class="slicer-title">Month</label><select id="monthSlicer" aria-labelledby="monthLabel" class="w-full p-1 border rounded bg-white text-xs"></select></div>
                     <div class="slicer w-full sm:w-auto md:w-48"><label id="tagLabel" for="tagSlicer" class="slicer-title">Tag (Type)</label><select id="tagSlicer" aria-labelledby="tagLabel" class="w-full p-1 border rounded bg-white text-xs"></select></div>
                     <!-- New Clear Button for Dashboard -->
@@ -256,11 +257,34 @@
                 <div class="visual-container">
                     <h3 class="font-medium mb-2">Validate 'Missing in PR' against Books Data</h3>
                     <p class="text-sm text-gray-600 mb-4">Upload your 'Books' Excel file. The script will find matches for 'Missing_in_PR...' tags based on **Doc Number & GSTIN** and automatically update their status to "Invoice Received".</p>
-                    
+
                     <input type="file" id="booksFileUploader" class="hidden" accept=".xlsx, .xls">
                     <label for="booksFileUploader" class="btn btn-primary">Upload 'Books' Excel File</label>
-                    
+
                     <p id="validation-status" class="mt-4 text-sm text-gray-500">Ready for validation file.</p>
+                </div>
+
+                <!-- New Table for Matched/Unmatched Results -->
+                <div class="visual-container w-full mt-4">
+                    <h3 class="visual-title text-l font-semibold text-gray-700">Validation Results</h3>
+                    <p class="text-xs text-gray-500 mb-1" id="validation-results-row-count">Showing 0 rows.</p>
+                    <div id="validation-results-table-container" class="table-container bg-white border-none shadow-none rounded-none">
+                        <table class="w-full text-left table-auto">
+                            <thead class="sticky-header">
+                                <tr class="text-gray-700 uppercase bg-gray-50">
+                                    <th class="px-2 py-1">Supplier</th>
+                                    <th class="px-2 py-1">Doc Num</th>
+                                    <th class="px-2 py-1">Doc Date</th>
+                                    <th class="px-2 py-1">Tag</th>
+                                    <th class="px-2 py-1 text-right">Taxable</th>
+                                    <th class="px-2 py-1 text-right">Total GST</th>
+                                    <th class="px-2 py-1">Remarks</th>
+                                    <th class="px-2 py-1">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="validation-results-table-body"></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
@@ -338,7 +362,7 @@
         window.toggleChatbot = function() { const cb = document.getElementById('chatbotSidebar'); if (cb) cb.classList.toggle('open'); }
         window.closeMailingListModal = function() { const modal = document.getElementById('mailingListModal'); if (modal) modal.style.display = 'none'; currentMailingListCategory = null; }
         window.printPreviewContent = function() { console.log("Attempting controlled print..."); try { window.print(); } catch(e){ showError("Print failed: " + e.message); console.error("Print error:", e); } }
-        
+
         // --- IndexedDB Functions (Optimized) ---
         function openDB() {
             return new Promise((resolve, reject) => {
@@ -432,7 +456,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             try {
                 console.log("DOM loaded. Initializing script...");
-                
+
                 // --- DOM Elements (Must be fetched *inside* DOMContentLoaded) ---
                 const startupScreen = document.getElementById('startupScreen');
                 const dashboardDiv = document.getElementById('dashboard');
@@ -442,6 +466,7 @@
                 const btnClearSaved = document.getElementById('btnClearSaved');
                 const clearDataBtnHeader = document.getElementById('clearDataBtnHeader');
                 const companySlicer = document.getElementById('companySlicer');
+                const fySlicer = document.getElementById('fySlicer');
                 const monthSlicer = document.getElementById('monthSlicer');
                 const tagSlicer = document.getElementById('tagSlicer');
                 const exportBtnPage2 = document.getElementById('export-btn-page2');
@@ -470,115 +495,259 @@
                 if (!startupScreen || !dashboardDiv || !fileInput || !btnLoadSaved || !btnClearSaved || !clearDataBtnHeader || !booksFileUploader) {
                     throw new Error("Critical UI elements are missing. Cannot initialize.");
                 }
-                
+
                 // --- Core Data Processing ---
-                function processUploadedData(rawData) { console.log("Processing", rawData.length, "rows..."); if (!Array.isArray(rawData)) throw new Error("Data invalid."); const p = rawData.map((row, index) => { try { if (typeof row !== 'object' || row === null) return null; const nr = { id: `row_${index}` }; Object.keys(row).forEach(key => { if (key && !key.startsWith('__EMPTY')) { nr[key.trim()] = row[key]; } }); const tv = nr['Type'] ?? nr['Tag (Type)']; nr['Type'] = tv ? String(tv).trim() : ""; nr['Sum of Taxable Value (2B)'] = parseCurrency(nr['Sum of Taxable Value (2B)']); nr['Sum of IGST (2B)'] = parseCurrency(nr['Sum of IGST (2B)']); nr['Sum of CGST (2B)'] = parseCurrency(nr['Sum of CGST (2B)']); nr['Sum of SGST (2B)'] = parseCurrency(nr['Sum of SGST (2B)']); nr['Total GST'] = (nr['Sum of IGST (2B)'] || 0) + (nr['Sum of CGST (2B)'] || 0) + (nr['Sum of SGST (2B)'] || 0); let dd = nr['Document Date (2B)']; if (dd instanceof Date) { nr['Document Date (2B)'] = dd.toLocaleDateString('en-IN', {day:'2-digit',month:'2-digit',year:'numeric'}); } else if (!(dd && typeof dd === 'string' && dd.match(/^\d{1,2}-\d{1,2}-\d{4}$/))) { nr['Document Date (2B)'] = ''; } nr['Remarks'] = nr['Remarks'] ? String(nr['Remarks']) : ''; nr['Supplier Name'] = nr['Supplier Name'] ? String(nr['Supplier Name']) : 'Unknown'; nr['Document Number (2B)'] = nr['Document Number (2B)'] ? String(nr['Document Number (2B)']) : ''; nr['Company Name'] = nr['Company Name'] ? String(nr['Company Name']) : 'Unknown'; nr['Month'] = nr['Month'] ? String(nr['Month']) : 'Unknown'; return nr; } catch (re) { console.error(`Err row ${index}:`, re, row); return null; } }).filter(r => r !== null); console.log("Processed:", p.length); return p; }
+                function processUploadedData(rawData) {
+                    console.log("Processing", rawData.length, "rows...");
+                    if (!Array.isArray(rawData)) throw new Error("Data invalid.");
+                    const p = rawData.map((row, index) => {
+                        try {
+                            if (typeof row !== 'object' || row === null) return null;
+                            const nr = { id: `row_${index}` };
+                            Object.keys(row).forEach(key => { if (key && !key.startsWith('__EMPTY')) { nr[key.trim()] = row[key]; } });
+
+                            const tv = nr['Type'] ?? nr['Tag (Type)'];
+                            nr['Type'] = tv ? String(tv).trim() : "";
+                            nr['Sum of Taxable Value (2B)'] = parseCurrency(nr['Sum of Taxable Value (2B)']);
+                            nr['Sum of IGST (2B)'] = parseCurrency(nr['Sum of IGST (2B)']);
+                            nr['Sum of CGST (2B)'] = parseCurrency(nr['Sum of CGST (2B)']);
+                            nr['Sum of SGST (2B)'] = parseCurrency(nr['Sum of SGST (2B)']);
+                            nr['Total GST'] = (nr['Sum of IGST (2B)'] || 0) + (nr['Sum of CGST (2B)'] || 0) + (nr['Sum of SGST (2B)'] || 0);
+
+                            // --- Robust Date Parsing & Financial Year Calculation ---
+                            let docDateRaw = nr['Document Date (2B)'];
+                            let docDateObj = parseDateString(docDateRaw); // Use the new robust parser
+
+                            if (docDateObj) {
+                                // Format the date consistently for display
+                                nr['Document Date (2B)'] = docDateObj.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-');
+                                nr['Financial Year'] = getFinancialYear(docDateObj);
+                            } else {
+                                nr['Document Date (2B)'] = ''; // Set to blank if invalid
+                                nr['Financial Year'] = 'Unknown';
+                            }
+                            // --- End Date Logic ---
+
+                            nr['Remarks'] = nr['Remarks'] ? String(nr['Remarks']) : '';
+                            nr['Supplier Name'] = nr['Supplier Name'] ? String(nr['Supplier Name']) : 'Unknown';
+                            nr['Document Number (2B)'] = nr['Document Number (2B)'] ? String(nr['Document Number (2B)']) : '';
+                            nr['Company Name'] = nr['Company Name'] ? String(nr['Company Name']) : 'Unknown';
+                            nr['Month'] = nr['Month'] ? String(nr['Month']) : 'Unknown';
+                            return nr;
+                        } catch (re) {
+                            console.error(`Err row ${index}:`, re, row);
+                            return null;
+                        }
+                    }).filter(r => r !== null);
+                    console.log("Processed:", p.length);
+                    return p;
+                }
                 async function handleFile(event) { // Made async
                     console.log("File selected."); const file = event.target.files[0]; if (!file) return; showLoader("Reading file..."); uploadStatus.textContent="Reading..."; uploadStatus.classList.remove('text-red-600'); hideError(); if (typeof XLSX==='undefined') { showError("Excel lib failed."); return; } const reader = new FileReader(); reader.onload = async function(e) { // Made async
                         try { showLoader("Processing data..."); console.log("Processing..."); const data=new Uint8Array(e.target.result); const wb=XLSX.read(data, {type:'array', cellDates:true}); const sn='Transactions'; if (!wb.SheetNames.includes(sn)) throw new Error(`Sheet "${sn}" missing.`); const ws=wb.Sheets[sn]; const rd=XLSX.utils.sheet_to_json(ws, {raw:false, defval:null}); if (!Array.isArray(rd) || rd.length === 0) throw new Error(`No data/invalid format.`); allData=processUploadedData(rd); actionState={}; mailingListAssignments = {}; console.log("Processed:", allData.length); if (allData.length > 0) { showLoader("Saving data to browser..."); if(!db) await openDB(); await bulkSaveData(STORE_NAME, [{ id: 'all_transactions', data: allData }], true); await bulkSaveData(ACTIONS_STORE_NAME, []); await bulkSaveData(ASSIGNMENTS_STORE_NAME, []); console.log("Data bulk-saved to IndexedDB."); populateSlicers(allData); populateDatalists(allData); filterData(); renderMailingListCategories(); requestAnimationFrame(() => { switchView('dashboard'); }); console.log("Dashboard shown."); } else { throw new Error("No valid rows."); } } catch (error) { showError(`Processing Error: ${error.message}`); if (fileInput) fileInput.value=null; console.error("Proc err:", error);} }; reader.onerror = function(re) { showError("Error reading file."); if (fileInput) fileInput.value=null; console.error("Read err:", re);}; reader.readAsArrayBuffer(file);
                 }
                 async function handleBooksFile(event) {
-                    console.log("Books file selected.");
-                    const file = event.target.files[0];
-                    if (!file) return;
-                    if (allData.length === 0) {
-                        showError("Please load the main transaction data first.");
-                        return;
+    console.log("Books file selected.");
+    const file = event.target.files[0];
+    if (!file) return;
+    if (allData.length === 0) {
+        showError("Please load the main transaction data first.");
+        return;
+    }
+    showLoader("Reading Books file...");
+    validationStatus.textContent = "Reading Books file...";
+    validationStatus.classList.remove('text-red-600', 'text-green-600');
+    hideError();
+
+    if (typeof XLSX === 'undefined') {
+        showError("Excel lib failed.");
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        try {
+            showLoader("Validating transactions...");
+            const data = new Uint8Array(e.target.result);
+            const wb = XLSX.read(data, {
+                type: 'array'
+            });
+            const sn = wb.SheetNames[0]; // Explicitly get the first sheet name
+            if (!sn) throw new Error("No sheets found in Books file.");
+
+            const rd = XLSX.utils.sheet_to_json(wb.Sheets[sn]);
+            if (!Array.isArray(rd) || rd.length === 0) throw new Error(`No data found in '${sn}' sheet.`);
+
+            // --- Create multiple lookup sets ---
+            const docNumLookup = new Set();
+            const docNumGstinLookup = new Set();
+            const docNumSupplierLookup = new Set();
+
+            let voucherCol, gstinCol, supplierCol;
+            if (rd.length > 0) {
+                const headers = Object.keys(rd[0]).map(h => h.trim().toLowerCase());
+                const voucherHeader = headers.find(h => h === 'voucher ref. no.');
+                const gstinHeader = headers.find(h => h === 'gstin/uin');
+                const supplierHeader = headers.find(h => h === 'party name' || h === 'supplier name');
+
+                // Get original case headers for data access
+                const originalHeaders = Object.keys(rd[0]);
+                if (voucherHeader) voucherCol = originalHeaders.find(h => h.trim().toLowerCase() === voucherHeader);
+                if (gstinHeader) gstinCol = originalHeaders.find(h => h.trim().toLowerCase() === gstinHeader);
+                if (supplierHeader) supplierCol = originalHeaders.find(h => h.trim().toLowerCase() === supplierHeader);
+            }
+
+            if (!voucherCol) {
+                throw new Error("Crucial column 'Voucher Ref. No.' not found in Books file.");
+            }
+
+            // Create a set of keys from the main data for quick lookups
+            const mainDataKeys = new Set(allData.map(row => `${String(row['Document Number (2B)'] || '').trim()}|${String(row['Supplier GSTIN (2B)'] || '').trim()}`));
+
+            const validationResults = [];
+
+            rd.forEach(row => {
+                const docNum = row[voucherCol] ? String(row[voucherCol]).trim() : '';
+                if (docNum) {
+                    const gstin = gstinCol && row[gstinCol] ? String(row[gstinCol]).trim() : '';
+                    const supplier = supplierCol && row[supplierCol] ? String(row[supplierCol]).trim() : '';
+                    const key = `${docNum}|${gstin}`;
+
+                    if (!mainDataKeys.has(key)) {
+                        validationResults.push({
+                            'Supplier Name': supplier,
+                            'Document Number (2B)': docNum,
+                            'Document Date (2B)': '', // Or parse from books if available
+                            'Type': '',
+                            'Sum of Taxable Value (2B)': 0, // Or parse from books if available
+                            'Total GST': 0, // Or parse from books if available
+                            'Remarks': 'Unmatched',
+                            'Status': 'Unmatched'
+                        });
                     }
-                    showLoader("Reading Books file...");
-                    validationStatus.textContent = "Reading Books file...";
-                    validationStatus.classList.remove('text-red-600', 'text-green-600');
-                    hideError();
 
-                    if (typeof XLSX==='undefined') { showError("Excel lib failed."); return; }
-                    const reader = new FileReader();
-                    reader.onload = async function(e) {
-                        try {
-                            showLoader("Validating transactions...");
-                            console.log("Processing Books file...");
-                            const data = new Uint8Array(e.target.result);
-                            const wb = XLSX.read(data, { type: 'array' });
-                            const sn = wb.SheetNames[0]; // Assume first sheet
-                            if (!sn) throw new Error("No sheets found in Books file.");
-                            
-                            const rd = XLSX.utils.sheet_to_json(wb.Sheets[sn]);
-                            if (!Array.isArray(rd) || rd.length === 0) throw new Error(`No data found in '${sn}' sheet.`);
-                            
-                            const booksLookup = new Set();
-                            let voucherCol, gstinCol;
-                            if (rd.length > 0) {
-                                const headers = Object.keys(rd[0]);
-                                voucherCol = headers.find(h => h.trim().toLowerCase() === 'voucher ref. no.');
-                                gstinCol = headers.find(h => h.trim().toLowerCase() === 'gstin/uin');
-                            }
-                            if (!voucherCol || !gstinCol) {
-                                throw new Error("Columns 'Voucher Ref. No.' or 'GSTIN/UIN' not found in Books file.");
-                            }
-                            
-                            rd.forEach(row => {
-                                const docNum = row[voucherCol] ? String(row[voucherCol]).trim() : '';
-                                const gstin = row[gstinCol] ? String(row[gstinCol]).trim() : '';
-                                if (docNum && gstin) {
-                                    booksLookup.add(`${docNum}|${gstin}`);
-                                }
-                            });
-                            console.log(`Created Books lookup with ${booksLookup.size} items.`);
+                    docNumLookup.add(docNum);
+                    if (gstin) docNumGstinLookup.add(key);
+                    if (supplier) docNumSupplierLookup.add(`${docNum}|${supplier}`);
+                }
+            });
+            console.log(`Created lookups: DocNum (${docNumLookup.size}), DocNum+GSTIN (${docNumGstinLookup.size}), DocNum+Supplier (${docNumSupplierLookup.size}).`);
 
-                            let updateCount = 0;
-                            allData.forEach(row => {
-                                const tag = row['Type'];
-                                if (tag === 'Missing_in_PR_Current_Month' || tag === 'Missing_in_PR_Cumulative') {
-                                    const docNum = String(row['Document Number (2B)'] || '').trim();
-                                    const gstin = String(row['Supplier GSTIN (2B)'] || '').trim();
-                                    const key = `${docNum}|${gstin}`;
-                                    
-                                    if (docNum && gstin && booksLookup.has(key)) {
-                                        if (actionState[row.id] !== "Invoice Received") {
-                                            actionState[row.id] = "Invoice Received";
-                                            updateCount++;
-                                        }
-                                    }
-                                }
-                            });
+            let updateCount = 0;
+            allData.forEach(row => {
+                const docNum = String(row['Document Number (2B)'] || '').trim();
+                if (!docNum) return;
 
-                            console.log(`Validation complete. ${updateCount} rows updated.`);
+                const gstin = String(row['Supplier GSTIN (2B)'] || '').trim();
+                const supplier = String(row['Supplier Name'] || '').trim();
 
-                            if (updateCount > 0) {
-                                showLoader("Saving updates...");
-                                if (!db) await openDB();
-                                // Save all actions (bulk)
-                                const actionsArray = Object.entries(actionState).map(([id, value]) => ({ id, value }));
-                                await bulkSaveData(ACTIONS_STORE_NAME, actionsArray, false); // false = not bulk object
-                                console.log("Updated actions saved to DB.");
-                                renderPage2Table(); // Refresh Page 2 table
-                            }
-                            
-                            validationStatus.textContent = `Validation complete. ${updateCount} transactions were updated to "Invoice Received".`;
-                            validationStatus.classList.add('text-green-600');
-
-                        } catch (error) {
-                            showError(`Validation Error: ${error.message}`);
-                            validationStatus.textContent = `Error: ${error.message}`;
-                            validationStatus.classList.add('text-red-600');
-                        } finally {
-                            hideLoader();
-                            if(booksFileUploader) booksFileUploader.value = null;
-                        }
-                    };
-                    reader.onerror = function(re) { showError("Error reading Books file."); if (booksFileUploader) booksFileUploader.value = null; console.error("Read err:", re);};
-                    reader.readAsArrayBuffer(file);
+                let isMatch = false;
+                // Priority 1: Doc Number only
+                if (docNumLookup.has(docNum)) {
+                    isMatch = true;
+                }
+                // Priority 2: Doc Number & GSTIN
+                if (!isMatch && gstin && docNumGstinLookup.has(`${docNum}|${gstin}`)) {
+                    isMatch = true;
+                }
+                // Priority 3: Doc Number & Supplier Name
+                if (!isMatch && supplier && docNumSupplierLookup.has(`${docNum}|${supplier}`)) {
+                    isMatch = true;
                 }
 
+                if (isMatch) {
+                    if (actionState[row.id] !== "Accounted") {
+                        actionState[row.id] = "Accounted";
+                        updateCount++;
+                    }
+                    validationResults.push({ ...row,
+                        'Status': 'Matched'
+                    });
+                }
+            });
 
-                function populateSlicers(data) { console.log("Populating global slicers..."); try { const cs=new Set(data.map(r=>r['Company Name']).filter(Boolean)); const ms=new Set(data.map(r=>r['Month']).filter(Boolean)); const ts=new Set(data.map(r=>r['Type']).filter(Boolean)); populateSelect(companySlicer, cs, 'All'); populateSelect(monthSlicer, ms, 'All'); populateSelect(tagSlicer, ts, 'All'); console.log("Global slicers populated."); } catch(e){ showError(`Filter setup error: ${e.message}`); console.error("Slicer err:", e); } }
+
+            console.log(`Validation complete. ${updateCount} new rows marked as 'Accounted'.`);
+
+            if (updateCount > 0) {
+                showLoader("Saving updates...");
+                if (!db) await openDB();
+                const actionsArray = Object.entries(actionState).map(([id, value]) => ({
+                    id,
+                    value
+                }));
+                await bulkSaveData(ACTIONS_STORE_NAME, actionsArray, false);
+                console.log("Updated actions saved to DB.");
+                renderPage2Table(); // Refresh Page 2
+            }
+
+            renderValidationResultsTable(validationResults);
+
+            validationStatus.textContent = `Validation complete. ${updateCount} transactions were updated to "Accounted". Found ${validationResults.length} total matched/unmatched records.`;
+            validationStatus.classList.add('text-green-600');
+
+        } catch (error) {
+            showError(`Validation Error: ${error.message}`);
+            validationStatus.textContent = `Error: ${error.message}`;
+            validationStatus.classList.add('text-red-600');
+        } finally {
+            hideLoader();
+            if (booksFileUploader) booksFileUploader.value = null;
+        }
+    };
+    reader.onerror = function(re) {
+        showError("Error reading Books file.");
+        if (booksFileUploader) booksFileUploader.value = null;
+        console.error("Read err:", re);
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+
+                function populateSlicers(data) {
+                    console.log("Populating global slicers...");
+                    try {
+                        const cs = new Set(data.map(r => r['Company Name']).filter(Boolean));
+                        const fys = new Set(data.map(r => r['Financial Year']).filter(Boolean));
+                        const ts = new Set(data.map(r => r['Type']).filter(Boolean));
+
+                        populateSelect(companySlicer, cs, 'All');
+                        populateSelect(fySlicer, [...fys].sort().reverse(), 'All'); // Sort descending
+                        populateSelect(tagSlicer, ts, 'All');
+
+                        // Populate month slicer based on the selected FY
+                        updateMonthSlicer();
+
+                        console.log("Global slicers populated.");
+                    } catch (e) {
+                        showError(`Filter setup error: ${e.message}`);
+                        console.error("Slicer err:", e);
+                    }
+                }
+
+                function updateMonthSlicer() {
+                    const selectedFY = fySlicer.value;
+                    const relevantData = selectedFY === 'All' ? allData : allData.filter(r => r['Financial Year'] === selectedFY);
+                    const months = new Set(relevantData.map(r => r['Month']).filter(Boolean));
+
+                    // Sort months chronologically
+                    const sortedMonths = [...months].sort((a, b) => {
+                        const monthA = getMonthNumber(a);
+                        const monthB = getMonthNumber(b);
+                        // Adjust for FY (April is the first month)
+                        return ((monthA - 4 + 12) % 12) - ((monthB - 4 + 12) % 12);
+                    });
+
+                    populateSelect(monthSlicer, sortedMonths, 'All');
+                }
+
                 function populateSelect(selectEl, items, defaultOpt) { if(!selectEl){console.error("Select missing:", defaultOpt);return;} selectEl.innerHTML=`<option value="All">${defaultOpt}</option>`; [...items].sort().forEach(item=>{const o=document.createElement('option');o.textContent=item;o.value=item;selectEl.appendChild(o);}); }
-                
+
                 function populateDatalists(data) {
                     console.log("Populating datalists...");
                     try {
                         const supplierSet = new Set(data.map(r => r['Supplier Name']).filter(Boolean));
                         const docNumSet = new Set(data.map(r => r['Document Number (2B)']).filter(Boolean));
-                        
+
                         supplierDataList.innerHTML = [...supplierSet].map(s => `<option value="${s.replace(/"/g, '&quot;')}"></option>`).join('');
                         docNumDataList.innerHTML = [...docNumSet].map(d => `<option value="${String(d).replace(/"/g, '&quot;')}"></option>`).join('');
                         console.log("Datalists populated.");
@@ -588,8 +757,29 @@
                     }
                 }
 
-                function filterData() { console.log("Filtering..."); try { const sc=companySlicer.value; const sm=monthSlicer.value; const st=tagSlicer.value; filteredData=allData.filter(r=>(sc==='All'||r['Company Name']===sc)&&(sm==='All'||r['Month']===sm)&&(st==='All'||r['Type']===st)); console.log("Filtered:", filteredData.length); populateDashboard(filteredData); } catch(e){ showError(`Filter update error: ${e.message}`); console.error("Filter err:", e); } }
-                
+                function filterData() {
+                    console.log("Filtering...");
+                    try {
+                        const sc = companySlicer.value;
+                        const sfy = fySlicer.value;
+                        const sm = monthSlicer.value;
+                        const st = tagSlicer.value;
+
+                        filteredData = allData.filter(r =>
+                            (sc === 'All' || r['Company Name'] === sc) &&
+                            (sfy === 'All' || r['Financial Year'] === sfy) &&
+                            (sm === 'All' || r['Month'] === sm) &&
+                            (st === 'All' || r['Type'] === st)
+                        );
+
+                        console.log("Filtered:", filteredData.length);
+                        populateDashboard(filteredData);
+                    } catch (e) {
+                        showError(`Filter update error: ${e.message}`);
+                        console.error("Filter err:", e);
+                    }
+                }
+
                 function sumByTagIncludes(d, p, e=[]) {
                     let s=0; if(!d) return s;
                     for(const r of d){
@@ -601,7 +791,7 @@
                     return s;
                 }
                 function sumByTag(d, t) { let s=0; if(!d) return s; for(const r of d){if(r['Type']===t) s+=(r['Total GST']||0);} return s;}
-                
+
                 function populateDashboard(d) {
                     console.log("Populating dashboard...");
                     try {
@@ -627,8 +817,34 @@
                     } catch (e) { showError(`Dashboard update error: ${e.message}`); console.error("Populate err:", e); }
                 }
 
-                let page2DataFilteredAndSorted = []; function renderPage2Table() { try { if(!drilldownTableBody) throw new Error("P2 body missing"); const sfInput = document.getElementById('filter-supplier-page2'); const dfInput = document.getElementById('filter-docnum-page2'); const sf=sfInput ? sfInput.value.toLowerCase() : ''; const df=dfInput ? dfInput.value.toLowerCase() : ''; let td=filteredData.filter(r=>(r['Supplier Name']||'').toLowerCase().includes(sf)&&(String(r['Document Number (2B)']||'')).toLowerCase().includes(df)); if(currentSortPage2.col) td.sort((a,b)=>sortTableData(a,b,currentSortPage2.col,currentSortPage2.dir)); page2DataFilteredAndSorted=td; const rc=td.length; const dl=MAX_ROWS_DISPLAY; document.getElementById('drilldown-row-count').innerText=`Showing ${Math.min(rc,dl)} of ${rc} rows.`; let rh=''; const ao=['None','Followed Up','Invoice Received','Followed up & Closed','No Response']; for(let i=0;i<Math.min(rc,dl);i++){const r=td[i]; const av=actionState[r.id]||'None'; const oh=ao.map(o=>`<option value="${o}" ${av===o?'selected':''}>${o==='None'?'-- Select --':o}</option>`).join(''); rh+=`<tr class="bg-white hover:bg-gray-50 text-xs"><td class="px-2 py-1 whitespace-nowrap">${r['Supplier Name']||''}</td><td class="px-2 py-1 whitespace-nowrap">${r['Document Number (2B)']||''}</td><td class="px-2 py-1 whitespace-nowrap">${r['Document Date (2B)']||''}</td><td class="px-2 py-1 whitespace-nowrap">${r['Type']||''}</td><td class="px-2 py-1 text-right">${formatCurrency(r['Sum of Taxable Value (2B)'],false)}</td><td class="px-2 py-1 text-right font-medium">${formatCurrency(r['Total GST'],false)}</td><td class="px-2 py-1 max-w-[150px] truncate" title="${r['Remarks']||''}">${r['Remarks']||''}</td><td class="px-2 py-1"><select data-id="${r.id}" class="action-select">${oh}</select></td></tr>`;} drilldownTableBody.innerHTML=rh; } catch(e){ showError(`P2 table error: ${e.message}`); console.error("Render P2 err:", e); } }
-                let page3DataFilteredAndSorted = []; function renderPage3Table() { try { const supplierAnalysisBody = document.getElementById('supplier-analysis-body'); if(!supplierAnalysisBody) throw new Error("P3 body missing"); const sfin=document.getElementById('filter-supplier-page3'); const sf=sfin?sfin.value.toLowerCase():''; const gd=groupBySupplierAndTag(filteredData); let td=gd.filter(g=>(g.supplier||'').toLowerCase().includes(sf)); if(currentSortPage3.col) td.sort((a,b)=>sortTableData(a,b,currentSortPage3.col,currentSortPage3.dir)); page3DataFilteredAndSorted=td; const rc=td.length; const dl=MAX_ROWS_DISPLAY; document.getElementById('supplier-row-count').innerText=`Showing ${Math.min(rc,dl)} of ${rc} groups.`; let rh=''; const mlOptions = mailingListCategories.map(c => `<option value="${c}">${c}</option>`).join(''); for(let i=0;i<Math.min(rc,dl);i++){const r=td[i]; const assignmentKey=`${r.supplier}|${r.tag}`; const currentAssignment=mailingListAssignments[assignmentKey]||'None'; const selectOptions=`<option value="None">-- Select --</option>`+mailingListCategories.map(c=>`<option value="${c}" ${currentAssignment===c?'selected':''}>${c}</option>`).join(''); rh+=`<tr class="bg-white hover:bg-gray-50 text-xs"><td class="px-2 py-1 font-medium whitespace-nowrap">${r.supplier}</td><td class="px-2 py-1 whitespace-nowrap">${r.tag}</td><td class="px-2 py-1 text-right text-red-600 font-medium">${formatCurrency(r.totalGst,false)}</td><td class="px-2 py-1"><select class="add-to-select" data-supplier="${r.supplier.replace(/"/g, '&quot;')}" data-tag="${r.tag.replace(/"/g, '&quot;')}">${selectOptions}</select></td></tr>`;} supplierAnalysisBody.innerHTML=rh; } catch(e){ showError(`P3 table error: ${e.message}`); console.error("Render P3 err:", e); } }
+                let page2DataFilteredAndSorted = []; function renderPage2Table() { try { if(!drilldownTableBody) throw new Error("P2 body missing"); const sfInput = document.getElementById('filter-supplier-page2'); const dfInput = document.getElementById('filter-docnum-page2'); const sf=sfInput ? sfInput.value.toLowerCase() : ''; const df=dfInput ? dfInput.value.toLowerCase() : ''; let td=filteredData.filter(r=>(r['Supplier Name']||'').toLowerCase().includes(sf)&&(String(r['Document Number (2B)']||'')).toLowerCase().includes(df)); if(currentSortPage2.col) td.sort((a,b)=>sortTableData(a,b,currentSortPage2.col,currentSortPage2.dir)); page2DataFilteredAndSorted=td; const rc=td.length; const dl=MAX_ROWS_DISPLAY; document.getElementById('drilldown-row-count').innerText=`Showing ${Math.min(rc,dl)} of ${rc} rows.`; let rh=''; const ao=['None', 'Accounted', 'Not Accounted', 'Invoice Not Received']; for(let i=0;i<Math.min(rc,dl);i++){const r=td[i]; const av=actionState[r.id]||'None'; const oh=ao.map(o=>`<option value="${o}" ${av===o?'selected':''}>${o==='None'?'-- Select --':o}</option>`).join(''); rh+=`<tr class="bg-white hover:bg-gray-50 text-xs"><td class="px-2 py-1 whitespace-nowrap">${r['Supplier Name']||''}</td><td class="px-2 py-1 whitespace-nowrap">${r['Document Number (2B)']||''}</td><td class="px-2 py-1 whitespace-nowrap">${r['Document Date (2B)']||''}</td><td class="px-2 py-1 whitespace-nowrap">${r['Type']||''}</td><td class="px-2 py-1 text-right">${formatCurrency(r['Sum of Taxable Value (2B)'],false)}</td><td class="px-2 py-1 text-right font-medium">${formatCurrency(r['Total GST'],false)}</td><td class="px-2 py-1 max-w-[150px] truncate" title="${r['Remarks']||''}">${r['Remarks']||''}</td><td class="px-2 py-1"><select data-id="${r.id}" class="action-select">${oh}</select></td></tr>`;} drilldownTableBody.innerHTML=rh; } catch(e){ showError(`P2 table error: ${e.message}`); console.error("Render P2 err:", e); } }
+                let page3DataFilteredAndSorted = []; function renderPage3Table() { try { const supplierAnalysisBody = document.getElementById('supplier-analysis-body'); if(!supplierAnalysisBody) throw new Error("P3 body missing"); const sfin=document.getElementById('filter-supplier-page3'); const sf=sfin?sfin.value.toLowerCase():''; const gd=groupBySupplierAndTag(filteredData); let td=gd.filter(g=>(g.supplier||'').toLowerCase().includes(sf)); if(currentSortPage3.col) td.sort((a,b)=>sortTableData(a,b,currentSortPage3.col,currentSortPage3.dir)); page3DataFilteredAndSorted=td; const rc=td.length; const dl=MAX_ROWS_DISPLAY; document.getElementById('supplier-row-count').innerText=`Showing ${Math.min(rc,dl)} of ${rc} groups.`; let rh=''; for(let i=0;i<Math.min(rc,dl);i++){const r=td[i]; const assignmentKey = r.supplier; const currentAssignment=mailingListAssignments[assignmentKey]||'None'; const selectOptions=`<option value="None">-- Select --</option>`+mailingListCategories.map(c=>`<option value="${c}" ${currentAssignment===c?'selected':''}>${c}</option>`).join(''); rh+=`<tr class="bg-white hover:bg-gray-50 text-xs"><td class="px-2 py-1 font-medium whitespace-nowrap">${r.supplier}</td><td class="px-2 py-1 whitespace-nowrap">${r.tag}</td><td class="px-2 py-1 text-right text-red-600 font-medium">${formatCurrency(r.totalGst,false)}</td><td class="px-2 py-1"><select class="add-to-select" data-supplier="${r.supplier.replace(/"/g, '&quot;')}">${selectOptions}</select></td></tr>`;} supplierAnalysisBody.innerHTML=rh; } catch(e){ showError(`P3 table error: ${e.message}`); console.error("Render P3 err:", e); } }
+                
+                function renderValidationResultsTable(results) {
+                    const tableBody = document.getElementById('validation-results-table-body');
+                    const rowCountEl = document.getElementById('validation-results-row-count');
+                    if (!tableBody || !rowCountEl) return;
+
+                    const rowCount = results.length;
+                    rowCountEl.innerText = `Showing ${rowCount} rows.`;
+
+                    let tableHTML = '';
+                    results.forEach(r => {
+                        const statusClass = r.Status === 'Matched' ? 'text-green-600' : 'text-red-600';
+                        tableHTML += `<tr class="bg-white hover:bg-gray-50 text-xs">
+                            <td class="px-2 py-1 whitespace-nowrap">${r['Supplier Name'] || ''}</td>
+                            <td class="px-2 py-1 whitespace-nowrap">${r['Document Number (2B)'] || ''}</td>
+                            <td class="px-2 py-1 whitespace-nowrap">${r['Document Date (2B)'] || ''}</td>
+                            <td class="px-2 py-1 whitespace-nowrap">${r['Type'] || ''}</td>
+                            <td class="px-2 py-1 text-right">${formatCurrency(r['Sum of Taxable Value (2B)'], false)}</td>
+                            <td class="px-2 py-1 text-right font-medium">${formatCurrency(r['Total GST'], false)}</td>
+                            <td class="px-2 py-1">${r['Remarks'] || ''}</td>
+                            <td class="px-2 py-1 font-medium ${statusClass}">${r.Status}</td>
+                        </tr>`;
+                    });
+                    tableBody.innerHTML = tableHTML;
+                }
+
                 function groupBySupplierAndTag(data) {
                     if (!data || data.length === 0) return [];
                     console.log("Grouping suppliers for Page 3...");
@@ -646,7 +862,6 @@
                         const rowMonthNum = getMonthNumber(r['Month']);
                         const docKey = `${s}|${r['Document Number (2B)']}`;
                         if (isCumulative && resolvedDocs.has(docKey)) { continue; }
-                        if (isCumulative && rowMonthNum !== latestMonthNum) { continue; }
                         const key = `${s}|${t}`;
                         if (!g[key]) g[key] = { supplier: s, tag: t, totalGst: 0 };
                         g[key].totalGst += (r['Total GST'] || 0);
@@ -655,19 +870,62 @@
                     return Object.values(g);
                 }
                 function sortTableData(a, b, col, dir) { let vA=a[col]; let vB=b[col]; const m=dir==='asc'?1:-1; if(col==='Document Date (2B)'){const dA=parseDateString(vA); const dB=parseDateString(vB); if(dA&&dB) return (dA-dB)*m; return (dA?-1:dB?1:0)*m;} if(col==='Sum of Taxable Value (2B)'||col==='Total GST'||col==='totalGst'){vA=typeof vA==='number'?vA:parseCurrency(vA); vB=typeof vB==='number'?vB:parseCurrency(vB); return(vA-vB)*m;} if(typeof vA==='string') return (vA||'').localeCompare(vB||'')*m; return 0;}
-                function parseDateString(ds) { if(!ds||typeof ds!=='string') return null; const p=ds.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/); return p?new Date(p[3],p[2]-1,p[1]):null;}
+
+                function parseDateString(ds) {
+                    if (!ds) return null;
+                    // Handle Excel numeric date format
+                    if (typeof ds === 'number') {
+                        // Excel's epoch starts on 1900-01-01, but incorrectly thinks 1900 is a leap year.
+                        // The formula adjusts for this by subtracting 1. JS epoch is in milliseconds.
+                        const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+                        const dateObj = new Date(excelEpoch.getTime() + ds * 86400000);
+                        if (!isNaN(dateObj.getTime())) return dateObj;
+                    }
+                    if (typeof ds !== 'string') return null;
+
+                    // Handle various string formats, preferring DD-MM-YYYY
+                    const parts = ds.match(/(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
+                    if (parts) {
+                        // Assuming DD-MM-YYYY format
+                        const day = parseInt(parts[1], 10);
+                        const month = parseInt(parts[2], 10) - 1;
+                        const year = parseInt(parts[3], 10);
+                        const date = new Date(year, month, day);
+                        if (!isNaN(date.getTime()) && date.getDate() === day) return date;
+                    }
+                     // Fallback for native Date parsing if the regex fails
+                    const nativeDate = new Date(ds);
+                    if (!isNaN(nativeDate.getTime())) return nativeDate;
+
+                    return null;
+                }
+
+                function getFinancialYear(date) {
+                    if (!date || !(date instanceof Date)) return 'Unknown';
+                    const year = date.getFullYear();
+                    const month = date.getMonth(); // 0-indexed (Jan=0, Mar=2, Apr=3)
+
+                    // FY starts in April (month index 3)
+                    if (month >= 3) {
+                        return `${year}-${String(year + 1).slice(-2)}`;
+                    } else {
+                        return `${year - 1}-${String(year).slice(-2)}`;
+                    }
+                }
                 function handleSortClick(ev) { try { const th=ev.target.closest('th.sortable'); if(!th) return; const tc=th.closest('.visual-container, .page-content'); if(!tc) return; const ip2=tc.querySelector('#drilldown-table-body')!==null; const cs=ip2?currentSortPage2:currentSortPage3; const cl=th.dataset.col; let nd=(cs.col===cl&&cs.dir==='asc')?'desc':'asc'; if(cs.col===cl&&cs.dir==='desc') nd=null; cs.col=nd?cl:null; cs.dir=nd; th.closest('thead').querySelectorAll('th.sortable').forEach(h=>{h.classList.remove('sort-asc','sort-desc'); if(h===th&&nd) h.classList.add(nd==='asc'?'sort-asc':'sort-desc');}); if(ip2) renderPage2Table(); else renderPage3Table(); } catch(e){ showError("Sort error."); console.error("Sort click err:", e); } }
                 function exportToCsv(data, fName, cols) { console.log("Export CSV:", fName); if(typeof XLSX==='undefined'){showError("Core Excel lib missing.");return;} if(!Array.isArray(data)||data.length===0){showError("No data.");return;} showLoader("Exporting CSV..."); setTimeout(()=>{try{const ed=data.map(r=>{const nr={}; cols.forEach(c=>{let v=r[c.key]; if(typeof v==='string'){v=v.replace(/"/g,'""'); if(v.includes(',')||v.includes('\n')||v.includes('"')){v=`"${v}"`;}} else if(v===null||v===undefined){v='';} else {v=String(v); if(v.includes(',')){v=`"${v}"`;}} nr[c.header]=v;}); return nr;}); const ws=XLSX.utils.json_to_sheet(ed,{header:cols.map(c=>c.header)}); const csv=XLSX.utils.sheet_to_csv(ws); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const link=document.createElement("a"); if(link.download!==undefined){const url=URL.createObjectURL(blob); link.setAttribute("href",url); link.setAttribute("download",`${fName}_${new Date().toISOString().slice(0,10)}.csv`); link.style.visibility='hidden'; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);} else {showError("CSV download not supported.");} console.log("CSV Export OK.");} catch(e){showError(`CSV Export failed: ${e.message}`); console.error("CSV Export err:", e);} finally{hideLoader();}}, 50); }
                 function renderMailingListCategories() { const div = document.getElementById('mailingListCategories'); if(div) div.innerHTML = mailingListCategories.map(cat => `<button onclick="showMailingListPreview('${cat}')" class="bg-blue-100 text-blue-700 px-3 py-1 rounded text-sm hover:bg-blue-200">${cat}</button>`).join(''); }
-                async function handleAddToMailingList(supplier, tag, selectElement) { // Made async
+
+                async function handleAddToMailingList(supplier, selectElement) {
                     const category = selectElement.value;
-                    const key = `${supplier}|${tag}`;
+                    const key = supplier; // Key is now just the supplier name
                     if (category === 'None') { delete mailingListAssignments[key]; }
                     else { mailingListAssignments[key] = category; }
-                    console.log(`Assignment for ${key}: ${category}`);
-                    try { await saveSingleAssignment(key, category); console.log("Assignment saved."); } // Workaround 2
+                    console.log(`Assignment for supplier ${key}: ${category}`);
+                    try { await saveSingleAssignment(key, category); console.log("Assignment saved."); }
                     catch (e) { console.error("Failed to save assignment:", e); showError("Failed to save mailing list assignment."); }
                 }
+
                 window.showMailingListPreview = function(category) {
                      console.log("Showing preview for:", category);
                      currentMailingListCategory = category;
@@ -675,39 +933,96 @@
                      const title = document.getElementById('mailingListModalTitle');
                      const previewArea = document.getElementById('mailingListPreviewArea');
                      if (!modal || !title || !previewArea) return;
+
                      title.textContent = `Mailing List: ${category}`;
-                     const itemsInCategory = Object.entries(mailingListAssignments).filter(([key, cat]) => cat === category).map(([key, cat]) => key);
-                     let previewData = allData.filter(row => { const key = `${row['Supplier Name']}|${row['Type']}`; return itemsInCategory.includes(key); });
+
+                     const assignedSuppliers = Object.entries(mailingListAssignments)
+                         .filter(([supplier, cat]) => cat === category)
+                         .map(([supplier, cat]) => supplier);
+
+                     let previewData = filteredData.filter(row =>
+                         assignedSuppliers.includes(row['Supplier Name']) &&
+                         actionState[row.id] !== 'Accounted' // Exclude 'Accounted' transactions
+                     );
+
+                     // --- Logic from original bug fix (Cumulative vs Current Month) ---
                      let latestMonthNum = 0;
-                     for (const r of allData) { latestMonthNum = Math.max(latestMonthNum, getMonthNumber(r['Month'])); }
+                     for (const r of filteredData) { latestMonthNum = Math.max(latestMonthNum, getMonthNumber(r['Month'])); }
                      const resolvedDocs = new Set();
                      for (const r of previewData) { if (r['Type'] && (r['Type'].includes('NowUploaded') || r['Type'].includes('NowClaimed'))) { resolvedDocs.add(`${r['Supplier Name']}|${r['Document Number (2B)']}`); } }
+
                      previewData = previewData.filter(row => {
                          if (row['Type'] === 'Missing_in_PR_Current_Month' && getMonthNumber(row['Month']) !== latestMonthNum) return false;
                          const docKey = `${row['Supplier Name']}|${row['Document Number (2B)']}`;
                          if (row['Type'].includes('_Cumulative') && resolvedDocs.has(docKey)) return false;
                          return true;
                      });
+                     // --- End original bug fix logic ---
+
                      console.log("Filtered Preview Data:", previewData);
-                     let tableHTML = `<table class="w-full text-left table-auto border-collapse"><thead><tr class="bg-gray-100 text-xs uppercase"><th class="border p-1">Supplier</th><th class="border p-1">Doc Num</th><th class="border p-1">Doc Date</th><th class="border p-1">Tag</th><th class="border p-1 text-right">Taxable</th><th class="border p-1 text-right">Total GST</th><th class="border p-1">Remarks</th><th class="border p-1">Action</th></tr></thead><tbody>`; if (previewData.length > 0) { previewData.forEach(r => { tableHTML += `<tr class="text-xs"><td class="border p-1">${r['Supplier Name'] || ''}</td><td class="border p-1">${r['Document Number (2B)'] || ''}</td><td class="border p-1">${r['Document Date (2B)'] || ''}</td><td class="border p-1">${r['Type'] || ''}</td><td class="border p-1 text-right">${formatCurrency(r['Sum of Taxable Value (2B)'], false)}</td><td class="border p-1 text-right">${formatCurrency(r['Total GST'], false)}</td><td class="border p-1">${r['Remarks'] || ''}</td><td class="border p-1">${actionState[r.id] || 'None'}</td></tr>`; }); } else { tableHTML += `<tr><td colspan="8" class="text-center p-4 text-gray-500">No items found matching the rules.</td></tr>`; } tableHTML += `</tbody></table>`; previewArea.innerHTML = tableHTML; modal.style.display = 'flex';
+                     let tableHTML = `<table class="w-full text-left table-auto border-collapse"><thead><tr class="bg-gray-100 text-xs uppercase"><th class="border p-1">Company</th><th class="border p-1">Supplier</th><th class="border p-1">Doc Num</th><th class="border p-1">Doc Date</th><th class="border p-1">Tag</th><th class="border p-1 text-right">Taxable</th><th class="border p-1 text-right">Total GST</th><th class="border p-1">Remarks</th><th class="border p-1">Action</th></tr></thead><tbody>`;
+                     if (previewData.length > 0) {
+                         previewData.forEach(r => {
+                             tableHTML += `<tr class="text-xs">
+                                 <td class="border p-1">${r['Company Name'] || ''}</td>
+                                 <td class="border p-1">${r['Supplier Name'] || ''}</td>
+                                 <td class="border p-1">${r['Document Number (2B)'] || ''}</td>
+                                 <td class="border p-1">${r['Document Date (2B)'] || ''}</td>
+                                 <td class="border p-1">${r['Type'] || ''}</td>
+                                 <td class="border p-1 text-right">${formatCurrency(r['Sum of Taxable Value (2B)'], false)}</td>
+                                 <td class="border p-1 text-right">${formatCurrency(r['Total GST'], false)}</td>
+                                 <td class="border p-1">${r['Remarks'] || ''}</td>
+                                 <td class="border p-1">${actionState[r.id] || 'None'}</td>
+                             </tr>`;
+                         });
+                     } else {
+                         tableHTML += `<tr><td colspan="9" class="text-center p-4 text-gray-500">No items found matching the rules.</td></tr>`;
+                     }
+                     tableHTML += `</tbody></table>`;
+                     previewArea.innerHTML = tableHTML;
+                     modal.style.display = 'flex';
                  }
+
                 window.exportMailingList = function() {
                      if (!currentMailingListCategory) return;
                      console.log("Exporting mailing list for:", currentMailingListCategory);
-                     const itemsInCategory = Object.entries(mailingListAssignments).filter(([key, cat]) => cat === currentMailingListCategory).map(([key, cat]) => key);
-                     let previewData = allData.filter(row => { const key = `${row['Supplier Name']}|${row['Type']}`; return itemsInCategory.includes(key); });
+
+                     const assignedSuppliers = Object.entries(mailingListAssignments)
+                         .filter(([supplier, cat]) => cat === currentMailingListCategory)
+                         .map(([supplier, cat]) => supplier);
+
+                     let previewData = filteredData.filter(row =>
+                         assignedSuppliers.includes(row['Supplier Name']) &&
+                         actionState[row.id] !== 'Accounted' // Exclude 'Accounted'
+                     );
+
+                     // --- Logic from original bug fix (Cumulative vs Current Month) ---
                      let latestMonthNum = 0;
-                     for (const r of allData) { latestMonthNum = Math.max(latestMonthNum, getMonthNumber(r['Month'])); }
+                     for (const r of filteredData) { latestMonthNum = Math.max(latestMonthNum, getMonthNumber(r['Month'])); }
                      const resolvedDocs = new Set();
                      for (const r of previewData) { if (r['Type'] && (r['Type'].includes('NowUploaded') || r['Type'].includes('NowClaimed'))) { resolvedDocs.add(`${r['Supplier Name']}|${r['Document Number (2B)']}`); } }
+
                      previewData = previewData.filter(row => {
                          if (row['Type'] === 'Missing_in_PR_Current_Month' && getMonthNumber(row['Month']) !== latestMonthNum) return false;
                          const docKey = `${row['Supplier Name']}|${row['Document Number (2B)']}`;
                          if (row['Type'].includes('_Cumulative') && resolvedDocs.has(docKey)) return false;
                          return true;
                      });
+                     // --- End original bug fix logic ---
+
                      if (previewData.length === 0) { showError("No data to export."); return; }
-                     const cols = [ { header: 'Supplier Name', key: 'Supplier Name' }, { header: 'Doc Number', key: 'Document Number (2B)' }, { header: 'Doc Date', key: 'Document Date (2B)' }, { header: 'Tag (Type)', key: 'Type' }, { header: 'Taxable Value', key: 'Sum of Taxable Value (2B)' }, { header: 'Total GST', key: 'Total GST' }, { header: 'Remarks', key: 'Remarks' }, { header: 'Action', key: 'Action' } ];
+
+                     const cols = [
+                         { header: 'Company Name', key: 'Company Name' },
+                         { header: 'Supplier Name', key: 'Supplier Name' },
+                         { header: 'Doc Number', key: 'Document Number (2B)' },
+                         { header: 'Doc Date', key: 'Document Date (2B)' },
+                         { header: 'Tag (Type)', key: 'Type' },
+                         { header: 'Taxable Value', key: 'Sum of Taxable Value (2B)' },
+                         { header: 'Total GST', key: 'Total GST' },
+                         { header: 'Remarks', key: 'Remarks' },
+                         { header: 'Action', key: 'Action' }
+                     ];
                      const data = previewData.map(row => ({ ...row, 'Action': actionState[row.id] || 'None' }));
                      exportToCsv(data, `Mailing_List_${currentMailingListCategory}`, cols);
                 }
@@ -717,105 +1032,11 @@
                 function simulateGeminiInterpretation(msg) { const lower=msg.toLowerCase(); let interp={action:'unknown', matchedText:msg}; const companies=Array.from(document.getElementById('companySlicer').options).map(o=>o.value).filter(v=>v!=='All'); const months=Array.from(document.getElementById('monthSlicer').options).map(o=>o.value).filter(v=>v!=='All'); const tags=Array.from(document.getElementById('tagSlicer').options).map(o=>o.value).filter(v=>v!=='All'); interp.company = companies.find(c=>lower.includes(c.toLowerCase().substring(0,Math.min(c.length, 5)))) || null; interp.month = months.find(m=>lower.includes(m.toLowerCase())) || null; interp.tag = tags.find(t=>lower.includes(t.toLowerCase().replace(/_/g,' '))) || null; if(lower.startsWith("show details for")||lower.startsWith("details for")){const sGuess=msg.substring(msg.toLowerCase().indexOf("for")+4).trim(); if(sGuess){interp.action='details'; interp.supplier=sGuess; return interp;}} if(interp.company||interp.month||interp.tag){interp.action='filter'; let f=[interp.company,interp.month,interp.tag].filter(Boolean).join(', '); interp.matchedText=f;} return interp; }
                 function setSlicerValue(slicer, valMatch) { if(!slicer||!valMatch) return false; const lowerM=valMatch.toLowerCase(); for(let i=0; i<slicer.options.length; i++){const optV=slicer.options[i].value; const optT=slicer.options[i].textContent; if(slicer.id==='companySlicer'){if(optV.toLowerCase().includes(lowerM)||optT.toLowerCase().includes(lowerM)){slicer.value=optV; console.log(`Chatbot set ${slicer.id}: ${optV}`); return true;}} else {if(optV.toLowerCase()===lowerM||optT.toLowerCase()===lowerM){slicer.value=optV; console.log(`Chatbot set ${slicer.id}: ${optV}`); return true;}}} console.warn(`Chatbot no match for "${valMatch}" in ${slicer.id}`); return false; }
                 function showDetailsPreview(data, title) { currentMailingListCategory = title; const modal = document.getElementById('mailingListModal'); const modalTitle = document.getElementById('mailingListModalTitle'); const previewArea = document.getElementById('mailingListPreviewArea'); if (!modal||!modalTitle||!previewArea) return; modalTitle.textContent = title; let thtml = `<table class="w-full text-left table-auto border-collapse"><thead><tr class="bg-gray-100 text-xs uppercase"><th class="border p-1">Supplier</th><th class="border p-1">Doc Num</th><th class="border p-1">Doc Date</th><th class="border p-1">Tag</th><th class="border p-1 text-right">Taxable</th><th class="border p-1 text-right">Total GST</th><th class="border p-1">Remarks</th><th class="border p-1">Action</th></tr></thead><tbody>`; if (data.length > 0) { data.forEach(r => { thtml += `<tr class="text-xs"><td class="border p-1">${r['Supplier Name']||''}</td><td class="border p-1">${r['Document Number (2B)']||''}</td><td class="border p-1">${r['Document Date (2B)']||''}</td><td class="border p-1">${r['Type']||''}</td><td class="border p-1 text-right">${formatCurrency(r['Sum of Taxable Value (2B)'],false)}</td><td class="border p-1 text-right">${formatCurrency(r['Total GST'],false)}</td><td class="border p-1">${r['Remarks']||''}</td><td class="border p-1">${actionState[r.id]||'None'}</td></tr>`; }); } else { thtml += `<tr><td colspan="8" class="text-center p-4 text-gray-500">No data found.</td></tr>`; } thtml += `</tbody></table>`; previewArea.innerHTML = thtml; modal.style.display = 'flex'; }
-                
-                async function handleBooksFile(event) {
-                    console.log("Books file selected.");
-                    const file = event.target.files[0];
-                    if (!file) return;
-                    if (allData.length === 0) {
-                        showError("Please load the main transaction data first.");
-                        return;
-                    }
-                    showLoader("Reading Books file...");
-                    const validationStatus = document.getElementById('validation-status');
-                    validationStatus.textContent = "Reading Books file...";
-                    validationStatus.classList.remove('text-red-600', 'text-green-600');
-                    hideError();
-
-                    if (typeof XLSX==='undefined') { showError("Excel lib failed."); return; }
-                    const reader = new FileReader();
-                    reader.onload = async function(e) {
-                        try {
-                            showLoader("Validating transactions...");
-                            console.log("Processing Books file...");
-                            const data = new Uint8Array(e.target.result);
-                            const wb = XLSX.read(data, { type: 'array' });
-                            const sn = wb.SheetNames[0]; // Assume first sheet
-                            if (!sn) throw new Error("No sheets found in Books file.");
-                            
-                            const rd = XLSX.utils.sheet_to_json(wb.Sheets[sn]);
-                            if (!Array.isArray(rd) || rd.length === 0) throw new Error(`No data found in '${sn}' sheet.`);
-                            
-                            const booksLookup = new Set();
-                            let voucherCol, gstinCol;
-                            if (rd.length > 0) {
-                                const headers = Object.keys(rd[0]);
-                                voucherCol = headers.find(h => h.trim().toLowerCase() === 'voucher ref. no.');
-                                gstinCol = headers.find(h => h.trim().toLowerCase() === 'gstin/uin');
-                            }
-                            if (!voucherCol || !gstinCol) {
-                                throw new Error("Columns 'Voucher Ref. No.' or 'GSTIN/UIN' not found in Books file.");
-                            }
-                            
-                            rd.forEach(row => {
-                                const docNum = row[voucherCol] ? String(row[voucherCol]).trim() : '';
-                                const gstin = row[gstinCol] ? String(row[gstinCol]).trim() : '';
-                                if (docNum && gstin) {
-                                    booksLookup.add(`${docNum}|${gstin}`);
-                                }
-                            });
-                            console.log(`Created Books lookup with ${booksLookup.size} items.`);
-
-                            let updateCount = 0;
-                            allData.forEach(row => {
-                                const tag = row['Type'];
-                                if (tag === 'Missing_in_PR_Current_Month' || tag === 'Missing_in_PR_Cumulative') {
-                                    const docNum = String(row['Document Number (2B)'] || '').trim();
-                                    const gstin = String(row['Supplier GSTIN (2B)'] || '').trim();
-                                    const key = `${docNum}|${gstin}`;
-                                    
-                                    if (docNum && gstin && booksLookup.has(key)) {
-                                        if (actionState[row.id] !== "Invoice Received") {
-                                            actionState[row.id] = "Invoice Received";
-                                            updateCount++;
-                                        }
-                                    }
-                                }
-                            });
-
-                            console.log(`Validation complete. ${updateCount} rows updated.`);
-
-                            if (updateCount > 0) {
-                                showLoader("Saving updates...");
-                                if (!db) await openDB();
-                                // Save all actions (bulk)
-                                const actionsArray = Object.entries(actionState).map(([id, value]) => ({ id, value }));
-                                await bulkSaveData(ACTIONS_STORE_NAME, actionsArray, false); // false = not bulk object
-                                console.log("Updated actions saved to DB.");
-                                renderPage2Table(); // Refresh Page 2 table
-                            }
-                            
-                            validationStatus.textContent = `Validation complete. ${updateCount} transactions were updated to "Invoice Received".`;
-                            validationStatus.classList.add('text-green-600');
-
-                        } catch (error) {
-                            showError(`Validation Error: ${error.message}`);
-                            validationStatus.textContent = `Error: ${error.message}`;
-                            validationStatus.classList.add('text-red-600');
-                        } finally {
-                            hideLoader();
-                            if(booksFileUploader) booksFileUploader.value = null;
-                        }
-                    };
-                    reader.onerror = function(re) { showError("Error reading Books file."); if (booksFileUploader) booksFileUploader.value = null; console.error("Read err:", re);};
-                    reader.readAsArrayBuffer(file);
-                }
-
 
                 // --- Event Listeners Initialization ---
                 console.log("Attaching event listeners...");
                  if (!fileInput) throw new Error("File input missing!"); fileInput.addEventListener('change', handleFile);
-                 
+
                  // --- New Startup Screen Listeners ---
                  if (btnLoadSaved) {
                      btnLoadSaved.addEventListener('click', async () => {
@@ -827,7 +1048,7 @@
                              if (!db) db = await openDB();
                              // ** Workaround 1: Load single bulk object **
                              const savedDataArray = await loadDataFromDB(STORE_NAME);
-                             
+
                              if (savedDataArray && savedDataArray.length > 0 && savedDataArray[0].data) {
                                  allData = savedDataArray[0].data; // Extract data
                                  const savedAssignmentsArray = await loadDataFromDB(ASSIGNMENTS_STORE_NAME);
@@ -835,12 +1056,12 @@
 
                                  mailingListAssignments = {};
                                  if (Array.isArray(savedAssignmentsArray)) savedAssignmentsArray.forEach(item => { mailingListAssignments[item.key] = item.value; });
-                                 
+
                                  actionState = {};
                                  if (Array.isArray(savedActionsArray)) savedActionsArray.forEach(item => { actionState[item.id] = item.value; });
 
                                  console.log("Loaded", allData.length, "rows from DB.");
-                                 
+
                                  populateSlicers(allData);
                                  populateDatalists(allData);
                                  filterData();
@@ -862,7 +1083,7 @@
                          }
                      });
                  } else console.warn("Load Saved button missing.");
-                 
+
                  if (btnClearSaved) {
                      btnClearSaved.addEventListener('click', async () => {
                          console.log("Clear Saved Data clicked.");
@@ -883,18 +1104,24 @@
                          }
                      });
                  } else console.warn("Clear Saved button missing.");
-                 
+
                  // --- Other Event Listeners ---
                  if (companySlicer) companySlicer.addEventListener('change', filterData); else console.warn("Company slicer missing.");
+                 if (fySlicer) {
+                    fySlicer.addEventListener('change', () => {
+                        updateMonthSlicer();
+                        filterData();
+                    });
+                 } else console.warn("FY slicer missing.");
                  if (monthSlicer) monthSlicer.addEventListener('change', filterData); else console.warn("Month slicer missing.");
                  if (tagSlicer) tagSlicer.addEventListener('change', filterData); else console.warn("Tag slicer missing.");
                  if (filterSupplierPage2) filterSupplierPage2.addEventListener('input', renderPage2Table); else console.warn("Filter Supplier P2 missing.");
                  if (filterDocNumPage2) filterDocNumPage2.addEventListener('input', renderPage2Table); else console.warn("Filter DocNum P2 missing.");
                  if (filterSupplierPage3) filterSupplierPage3.addEventListener('input', renderPage3Table); else console.warn("Filter Supplier P3 missing.");
-                 
-                 const mainContent = document.querySelector('main'); 
+
+                 const mainContent = document.querySelector('main');
                  if (!mainContent) throw new Error("Main content missing!");
-                 
+
                  mainContent.addEventListener('change', async (e) => {
                      if (e.target.classList.contains('action-select')) {
                          const id = e.target.dataset.id; const value = e.target.value;
@@ -902,14 +1129,14 @@
                          if (db) await saveSingleAction(id, value); // Save only this action
                      }
                      else if (e.target.classList.contains('add-to-select')) {
-                         await handleAddToMailingList(e.target.dataset.supplier, e.target.dataset.tag, e.target);
+                         await handleAddToMailingList(e.target.dataset.supplier, e.target);
                      }
                   });
-                  
+
                  mainContent.addEventListener('click', handleSortClick); // Sorting
                  if (exportBtnPage2) exportBtnPage2.addEventListener('click', () => { const cols = [ { header: 'Supplier Name', key: 'Supplier Name' }, { header: 'Doc Number', key: 'Document Number (2B)' }, { header: 'Doc Date', key: 'Document Date (2B)' }, { header: 'Tag (Type)', key: 'Type' }, { header: 'Taxable Value', key: 'Sum of Taxable Value (2B)' }, { header: 'Total GST', key: 'Total GST' }, { header: 'Remarks', key: 'Remarks' }, { header: 'Action', key: 'Action' } ]; const data = page2DataFilteredAndSorted.map(row => ({ ...row, 'Action': actionState[row.id] || 'None' })); exportToCsv(data, 'Transaction_Report', cols); }); else console.warn("Export P2 missing.");
                  if (exportBtnPage3) exportBtnPage3.addEventListener('click', () => { const cols = [ { header: 'Supplier Name', key: 'supplier' }, { header: 'Tag (Type)', key: 'tag' }, { header: 'Total GST', key: 'totalGst' } ]; exportToCsv(page3DataFilteredAndSorted, 'Supplier_Analysis', cols); }); else console.warn("Export P3 missing.");
-                 
+
                  // --- New Clear Button Listeners ---
                  if(clearActionsBtn) clearActionsBtn.addEventListener('click', async () => {
                      if (confirm("Clear all 'Action' selections?")) {
@@ -938,7 +1165,7 @@
                          hideLoader();
                      }
                  });
-                 
+
                  if (clearDataBtnHeader) clearDataBtnHeader.addEventListener('click', async () => {
                      console.log("Clear data header button clicked.");
                      if (confirm("Are you sure you want to clear all saved data? You will need to re-upload.")) {
@@ -954,7 +1181,6 @@
                  });
 
                  // --- New Listener for Page 5 Uploader ---
-                 const booksFileUploader = document.getElementById('booksFileUploader');
                  if (booksFileUploader) {
                      booksFileUploader.addEventListener('change', handleBooksFile);
                  } else {
@@ -964,7 +1190,7 @@
                 // Initial setup for Mailing List categories
                 renderMailingListCategories();
                 console.log("Event listeners attached.");
-                
+
                 // --- Initial Load Logic ---
                 console.log("Setting initial UI state...");
                 switchView('uploader'); // Start on the uploader/startup screen
@@ -979,18 +1205,7 @@
             }
 
         }); // End of DOMContentLoaded
-    } catch (globalError) { // Catch errors BEFORE DOMContentLoaded
-         console.error("Global script error (before DOMContentLoaded):", globalError);
-         alert(`Critical Error during script load: ${globalError.message}. Please refresh the page.`);
-         try { // Try manual fallback
-             const startupScreen = document.getElementById('startupScreen');
-             const loaderOverlay = document.getElementById('loader-overlay');
-             if (startupScreen) startupScreen.style.display = 'flex';
-             if (loaderOverlay) loaderOverlay.style.display = 'none';
-          } catch(e){}
-    }
     </script>
 
 </body>
 </html>
-
