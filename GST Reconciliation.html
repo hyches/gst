@@ -140,6 +140,7 @@
                 <div class="flex flex-wrap justify-center md:justify-end gap-2 w-full items-center"> <!-- Added items-center -->
                     <div class="slicer w-full sm:w-auto md:w-40"><label id="companyLabel" for="companySlicer" class="slicer-title">Company</label><select id="companySlicer" aria-labelledby="companyLabel" class="w-full p-1 border rounded bg-white text-xs"></select></div>
                     <div class="slicer w-full sm:w-auto md:w-32"><label id="monthLabel" for="monthSlicer" class="slicer-title">Month</label><select id="monthSlicer" aria-labelledby="monthLabel" class="w-full p-1 border rounded bg-white text-xs"></select></div>
+                    <div class="slicer w-full sm:w-auto md:w-32"><label id="fyLabel" for="fySlicer" class="slicer-title">FY</label><select id="fySlicer" aria-labelledby="fyLabel" class="w-full p-1 border rounded bg-white text-xs"></select></div>
                     <div class="slicer w-full sm:w-auto md:w-48"><label id="tagLabel" for="tagSlicer" class="slicer-title">Tag (Type)</label><select id="tagSlicer" aria-labelledby="tagLabel" class="w-full p-1 border rounded bg-white text-xs"></select></div>
                     <!-- New Clear Button for Dashboard -->
                     <button id="clearDataBtnHeader" class="clear-button px-3 py-1 ml-2">Clear & Upload New</button>
@@ -179,7 +180,9 @@
                 <div class="visual-container w-full">
                     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-2 gap-2">
                         <h2 class="visual-title text-xl font-semibold text-gray-700">Transaction Drilldown</h2>
-                        <div class="flex gap-2">
+                        <div class="flex gap-2 items-center">
+                             <label for="jtcToggle" class="text-sm font-medium text-gray-700">Show JTC Only:</label>
+                             <input type="checkbox" id="jtcToggle" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                              <button id="clearActionsBtn" class="clear-button px-3 py-1">Clear Actions</button>
                              <button id="export-btn-page2" class="bg-green-500 text-white px-3 py-1 rounded text-xs font-semibold hover:bg-green-600">Export CSV</button>
                         </div>
@@ -257,12 +260,32 @@
                 <h2 class="visual-title text-xl font-semibold text-gray-700">Validate with Books</h2>
                 <div class="visual-container">
                     <h3 class="font-medium mb-2">Validate 'Missing in PR' against Books Data</h3>
-                    <p class="text-sm text-gray-600 mb-4">Upload your 'Books' Excel file. The script will find matches for 'Missing_in_PR...' tags based on **Doc Number & GSTIN** and automatically update their status to "Invoice Received".</p>
+                    <p class="text-sm text-gray-600 mb-4">Upload your 'Books' Excel file. The script will find matches for 'Missing_in_PR...' tags based on selected criteria and automatically update their status to "Invoice Received".</p>
 
-                    <input type="file" id="booksFileUploader" class="hidden" accept=".xlsx, .xls">
-                    <label for="booksFileUploader" class="btn btn-primary">Upload 'Books' Excel File</label>
+                    <div class="flex items-center gap-4 mb-4">
+                        <input type="file" id="booksFileUploader" class="hidden" accept=".xlsx, .xls">
+                        <label for="booksFileUploader" class="btn btn-primary">Upload 'Books' Excel File</label>
+                        <select id="validationCriteria" class="p-1 border rounded bg-white text-xs">
+                            <option value="doc_gstin">Doc Number & GSTIN</option>
+                            <option value="doc_supplier">Doc Number & Supplier Name</option>
+                        </select>
+                        <button id="runValidation" class="btn btn-secondary">Run Validation</button>
+                    </div>
 
                     <p id="validation-status" class="mt-4 text-sm text-gray-500">Ready for validation file.</p>
+
+                    <div id="validation-results-container" class="mt-4 hidden">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <h4 class="font-semibold">Matched Transactions</h4>
+                                <div id="matched-transactions" class="table-container h-64"></div>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold">Unmatched Transactions</h4>
+                                <div id="unmatched-transactions" class="table-container h-64"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -446,12 +469,14 @@
                 const companySlicer = document.getElementById('companySlicer');
                 const monthSlicer = document.getElementById('monthSlicer');
                 const tagSlicer = document.getElementById('tagSlicer');
+                const fySlicer = document.getElementById('fySlicer');
                 const exportBtnPage2 = document.getElementById('export-btn-page2');
                 const exportBtnPage3 = document.getElementById('export-btn-page3');
                 const filterSupplierPage2 = document.getElementById('filter-supplier-page2');
                 const filterDocNumPage2 = document.getElementById('filter-docnum-page2');
                 const filterSupplierPage3 = document.getElementById('filter-supplier-page3');
                 const drilldownTableBody = document.getElementById('drilldown-table-body');
+                const jtcToggle = document.getElementById('jtcToggle');
                 const supplierAnalysisBody = document.getElementById('supplier-analysis-body');
                 const mailingListCategoriesDiv = document.getElementById('mailingListCategories');
                 const mailingListModal = document.getElementById('mailingListModal');
@@ -466,6 +491,7 @@
                 const clearAssignmentsBtn = document.getElementById('clearAssignmentsBtn');
                 const clearAllMailingListsBtn = document.getElementById('clearAllMailingListsBtn');
                 const validationStatus = document.getElementById('validation-status');
+                const booksFileUploader = document.getElementById('booksFileUploader');
 
                 // Check for crucial elements
                 if (!startupScreen || !dashboardDiv || !fileInput || !btnLoadSaved || !btnClearSaved || !clearDataBtnHeader) {
@@ -486,93 +512,161 @@
                         showError("Please load the main transaction data first.");
                         return;
                     }
-                    showLoader("Reading Books file...");
-                    validationStatus.textContent = "Reading Books file...";
-                    validationStatus.classList.remove('text-red-600', 'text-green-600');
-                    hideError();
 
-                    if (typeof XLSX==='undefined') { showError("Excel lib failed."); return; }
-                    const reader = new FileReader();
-                    reader.onload = async function(e) {
-                        try {
-                            showLoader("Validating transactions...");
-                            console.log("Processing Books file...");
-                            const data = new Uint8Array(e.target.result);
-                            const wb = XLSX.read(data, { type: 'array' });
-                            const sn = wb.SheetNames[0]; // Assume first sheet
-                            if (!sn) throw new Error("No sheets found in Books file.");
+                    const runValidationBtn = document.getElementById('runValidation');
+                    runValidationBtn.onclick = () => {
+                        showLoader("Reading Books file...");
+                        validationStatus.textContent = "Reading Books file...";
+                        validationStatus.classList.remove('text-red-600', 'text-green-600');
+                        hideError();
 
-                            const rd = XLSX.utils.sheet_to_json(wb.Sheets[sn]);
-                            if (!Array.isArray(rd) || rd.length === 0) throw new Error(`No data found in '${sn}' sheet.`);
+                        if (typeof XLSX === 'undefined') {
+                            showError("Excel lib failed.");
+                            return;
+                        }
+                        const reader = new FileReader();
+                        reader.onload = async function(e) {
+                            try {
+                                showLoader("Validating transactions...");
+                                console.log("Processing Books file...");
+                                const data = new Uint8Array(e.target.result);
+                                const wb = XLSX.read(data, {
+                                    type: 'array'
+                                });
+                                const sn = wb.SheetNames[0]; // Assume first sheet
+                                if (!sn) throw new Error("No sheets found in Books file.");
 
-                            const booksLookup = new Set();
-                            let voucherCol, gstinCol;
-                            if (rd.length > 0) {
-                                const headers = Object.keys(rd[0]);
-                                voucherCol = headers.find(h => h.trim().toLowerCase() === 'voucher ref. no.');
-                                gstinCol = headers.find(h => h.trim().toLowerCase() === 'gstin/uin');
-                            }
-                            if (!voucherCol || !gstinCol) {
-                                throw new Error("Columns 'Voucher Ref. No.' or 'GSTIN/UIN' not found in Books file.");
-                            }
+                                const rd = XLSX.utils.sheet_to_json(wb.Sheets[sn]);
+                                if (!Array.isArray(rd) || rd.length === 0) throw new Error(`No data found in '${sn}' sheet.`);
 
-                            rd.forEach(row => {
-                                const docNum = row[voucherCol] ? String(row[voucherCol]).trim() : '';
-                                const gstin = row[gstinCol] ? String(row[gstinCol]).trim() : '';
-                                // A valid GSTIN is 15 characters.
-                                if (docNum && gstin && gstin.length >= 15) {
-                                    booksLookup.add(`${docNum}|${gstin}`);
+                                const validationCriteria = document.getElementById('validationCriteria').value;
+                                const booksLookup = new Set();
+                                let voucherCol, gstinCol, partyNameCol;
+
+                                if (rd.length > 0) {
+                                    const headers = Object.keys(rd[0]);
+                                    voucherCol = headers.find(h => h.trim().toLowerCase() === 'voucher ref. no.');
+                                    gstinCol = headers.find(h => h.trim().toLowerCase() === 'gstin/uin');
+                                    partyNameCol = headers.find(h => h.trim().toLowerCase() === 'party name');
                                 }
-                            });
-                            console.log(`Created Books lookup with ${booksLookup.size} items.`);
 
-                            let updateCount = 0;
-                            allData.forEach(row => {
-                                const tag = row['Type'];
-                                if (tag === 'Missing_in_PR_Current_Month' || tag === 'Missing_in_PR_Cumulative') {
-                                    const docNum = String(row['Document Number (2B)'] || '').trim();
-                                    const gstin = String(row['Supplier GSTIN (2B)'] || '').trim();
-                                    const key = `${docNum}|${gstin}`;
+                                if (!voucherCol) {
+                                    throw new Error("Column 'Voucher Ref. No.' not found in Books file.");
+                                }
+                                if (validationCriteria === 'doc_gstin' && !gstinCol) {
+                                    throw new Error("Column 'GSTIN/UIN' not found for GSTIN based validation.");
+                                }
+                                if (validationCriteria === 'doc_supplier' && !partyNameCol) {
+                                    throw new Error("Column 'Party Name' not found for Supplier Name based validation.");
+                                }
 
-                                    if (docNum && gstin && booksLookup.has(key)) {
-                                        if (actionState[row.id] !== "Invoice Received") {
-                                            actionState[row.id] = "Invoice Received";
-                                            updateCount++;
+                                rd.forEach(row => {
+                                    const docNum = row[voucherCol] ? String(row[voucherCol]).trim() : '';
+                                    if (docNum) {
+                                        if (validationCriteria === 'doc_gstin') {
+                                            const gstin = row[gstinCol] ? String(row[gstinCol]).trim() : '';
+                                            if (gstin.length >= 15) {
+                                                booksLookup.add(`${docNum}|${gstin}`);
+                                            }
+                                        } else if (validationCriteria === 'doc_supplier') {
+                                            const supplierName = row[partyNameCol] ? String(row[partyNameCol]).trim() : '';
+                                            if (supplierName) {
+                                                booksLookup.add(`${docNum}|${supplierName}`);
+                                            }
                                         }
                                     }
+                                });
+                                console.log(`Created Books lookup with ${booksLookup.size} items based on ${validationCriteria}.`);
+
+                                let updateCount = 0;
+                                let matchedTransactions = [];
+                                let unmatchedTransactions = [];
+                                allData.forEach(row => {
+                                    const tag = row['Type'];
+                                    if (tag === 'Missing_in_PR_Current_Month' || tag === 'Missing_in_PR_Cumulative') {
+                                        const docNum = String(row['Document Number (2B)'] || '').trim();
+                                        let key;
+                                        if (validationCriteria === 'doc_gstin') {
+                                            const gstin = String(row['Supplier GSTIN (2B)'] || '').trim();
+                                            key = `${docNum}|${gstin}`;
+                                        } else {
+                                            const supplierName = String(row['Supplier Name'] || '').trim();
+                                            key = `${docNum}|${supplierName}`;
+                                        }
+
+                                        if (docNum && booksLookup.has(key)) {
+                                            if (actionState[row.id] !== "Invoice Received") {
+                                                actionState[row.id] = "Invoice Received";
+                                                updateCount++;
+                                            }
+                                            matchedTransactions.push(row);
+                                        } else {
+                                            unmatchedTransactions.push(row);
+                                        }
+                                    }
+                                });
+
+                                console.log(`Validation complete. ${updateCount} rows updated.`);
+                                displayValidationResults(matchedTransactions, unmatchedTransactions);
+
+                                if (updateCount > 0) {
+                                    showLoader("Saving updates...");
+                                    if (!db) await openDB();
+                                    const actionsArray = Object.entries(actionState).map(([id, value]) => ({
+                                        id,
+                                        value
+                                    }));
+                                    await bulkSaveData(ACTIONS_STORE_NAME, actionsArray, false);
+                                    console.log("Updated actions saved to DB.");
+                                    renderPage2Table();
                                 }
-                            });
 
-                            console.log(`Validation complete. ${updateCount} rows updated.`);
+                                validationStatus.textContent = `Validation complete. ${updateCount} transactions were updated to "Invoice Received".`;
+                                validationStatus.classList.add('text-green-600');
 
-                            if (updateCount > 0) {
-                                showLoader("Saving updates...");
-                                if (!db) await openDB();
-                                // Save all actions (bulk)
-                                const actionsArray = Object.entries(actionState).map(([id, value]) => ({ id, value }));
-                                await bulkSaveData(ACTIONS_STORE_NAME, actionsArray, false); // false = not bulk object
-                                console.log("Updated actions saved to DB.");
-                                renderPage2Table(); // Refresh Page 2 table
+                            } catch (error) {
+                                showError(`Validation Error: ${error.message}`);
+                                validationStatus.textContent = `Error: ${error.message}`;
+                                validationStatus.classList.add('text-red-600');
+                            } finally {
+                                hideLoader();
+                                if (booksFileUploader) booksFileUploader.value = null;
                             }
-
-                            validationStatus.textContent = `Validation complete. ${updateCount} transactions were updated to "Invoice Received".`;
-                            validationStatus.classList.add('text-green-600');
-
-                        } catch (error) {
-                            showError(`Validation Error: ${error.message}`);
-                            validationStatus.textContent = `Error: ${error.message}`;
-                            validationStatus.classList.add('text-red-600');
-                        } finally {
-                            hideLoader();
-                            if(booksFileUploader) booksFileUploader.value = null;
-                        }
+                        };
+                        reader.onerror = function(re) {
+                            showError("Error reading Books file.");
+                            if (booksFileUploader) booksFileUploader.value = null;
+                            console.error("Read err:", re);
+                        };
+                        reader.readAsArrayBuffer(file);
                     };
-                    reader.onerror = function(re) { showError("Error reading Books file."); if (booksFileUploader) booksFileUploader.value = null; console.error("Read err:", re);};
-                    reader.readAsArrayBuffer(file);
+                }
+
+                function displayValidationResults(matched, unmatched) {
+                    const container = document.getElementById('validation-results-container');
+                    const matchedTable = document.getElementById('matched-transactions');
+                    const unmatchedTable = document.getElementById('unmatched-transactions');
+                    container.classList.remove('hidden');
+
+                    matchedTable.innerHTML = createResultsTable(matched);
+                    unmatchedTable.innerHTML = createResultsTable(unmatched);
+                }
+
+                function createResultsTable(data) {
+                    let tableHTML = `<table class="w-full text-left table-auto"><thead><tr class="text-xs"><th class="px-2 py-1">Supplier</th><th class="px-2 py-1">Doc Num</th><th class="px-2 py-1 text-right">Total GST</th></tr></thead><tbody>`;
+                    if (data.length > 0) {
+                        data.forEach(r => {
+                            tableHTML += `<tr class="text-xs"><td class="px-2 py-1">${r['Supplier Name'] || ''}</td><td class="px-2 py-1">${r['Document Number (2B)'] || ''}</td><td class="px-2 py-1 text-right">${formatCurrency(r['Total GST'], false)}</td></tr>`;
+                        });
+                    } else {
+                        tableHTML += `<tr><td colspan="3" class="text-center p-4 text-gray-500">No transactions.</td></tr>`;
+                    }
+                    tableHTML += `</tbody></table>`;
+                    return tableHTML;
                 }
 
 
-                function populateSlicers(data) { console.log("Populating global slicers..."); try { const cs=new Set(data.map(r=>r['Company Name']).filter(Boolean)); const ms=new Set(data.map(r=>r['Month']).filter(Boolean)); const ts=new Set(data.map(r=>r['Type']).filter(Boolean)); populateSelect(companySlicer, cs, 'All'); populateSelect(monthSlicer, ms, 'All'); populateSelect(tagSlicer, ts, 'All'); console.log("Global slicers populated."); } catch(e){ showError(`Filter setup error: ${e.message}`); console.error("Slicer err:", e); } }
+                function populateSlicers(data) { console.log("Populating global slicers..."); try { const cs=new Set(data.map(r=>r['Company Name']).filter(Boolean)); const ms=new Set(data.map(r=>r['Month']).filter(Boolean)); const ts=new Set(data.map(r=>r['Type']).filter(Boolean)); const fys=new Set(data.map(r=>r['FY']).filter(Boolean)); populateSelect(companySlicer, cs, 'All'); populateSelect(monthSlicer, ms, 'All'); populateSelect(tagSlicer, ts, 'All'); populateSelect(fySlicer, fys, 'All'); console.log("Global slicers populated."); } catch(e){ showError(`Filter setup error: ${e.message}`); console.error("Slicer err:", e); } }
                 function populateSelect(selectEl, items, defaultOpt) { if(!selectEl){console.error("Select missing:", defaultOpt);return;} selectEl.innerHTML=`<option value="All">${defaultOpt}</option>`; [...items].sort().forEach(item=>{const o=document.createElement('option');o.textContent=item;o.value=item;selectEl.appendChild(o);}); }
 
                 function populateDatalists(data) {
@@ -590,7 +684,7 @@
                     }
                 }
 
-                function filterData() { console.log("Filtering..."); try { const sc=companySlicer.value; const sm=monthSlicer.value; const st=tagSlicer.value; filteredData=allData.filter(r=>(sc==='All'||r['Company Name']===sc)&&(sm==='All'||r['Month']===sm)&&(st==='All'||r['Type']===st)); console.log("Filtered:", filteredData.length); populateDashboard(filteredData); } catch(e){ showError(`Filter update error: ${e.message}`); console.error("Filter err:", e); } }
+                function filterData() { console.log("Filtering..."); try { const sc=companySlicer.value; const sm=monthSlicer.value; const st=tagSlicer.value; const sfy=fySlicer.value; filteredData=allData.filter(r=>(sc==='All'||r['Company Name']===sc)&&(sm==='All'||r['Month']===sm)&&(st==='All'||r['Type']===st)&&(sfy==='All'||r['FY']===sfy)); console.log("Filtered:", filteredData.length); populateDashboard(filteredData); } catch(e){ showError(`Filter update error: ${e.message}`); console.error("Filter err:", e); } }
 
                 function sumByTagIncludes(d, p, e=[]) {
                     let s=0; if(!d) return s;
@@ -629,8 +723,8 @@
                     } catch (e) { showError(`Dashboard update error: ${e.message}`); console.error("Populate err:", e); }
                 }
 
-                let page2DataFilteredAndSorted = []; function renderPage2Table() { try { if(!drilldownTableBody) throw new Error("P2 body missing"); const sfInput = document.getElementById('filter-supplier-page2'); const dfInput = document.getElementById('filter-docnum-page2'); const sf=sfInput ? sfInput.value.toLowerCase() : ''; const df=dfInput ? dfInput.value.toLowerCase() : ''; let td=filteredData.filter(r=>(r['Supplier Name']||'').toLowerCase().includes(sf)&&(String(r['Document Number (2B)']||'')).toLowerCase().includes(df)); if(currentSortPage2.col) td.sort((a,b)=>sortTableData(a,b,currentSortPage2.col,currentSortPage2.dir)); page2DataFilteredAndSorted=td; const rc=td.length; const dl=MAX_ROWS_DISPLAY; document.getElementById('drilldown-row-count').innerText=`Showing ${Math.min(rc,dl)} of ${rc} rows.`; let rh=''; const ao=['None','Followed Up','Invoice Received','Followed up & Closed','No Response']; for(let i=0;i<Math.min(rc,dl);i++){const r=td[i]; const av=actionState[r.id]||'None'; const oh=ao.map(o=>`<option value="${o}" ${av===o?'selected':''}>${o==='None'?'-- Select --':o}</option>`).join(''); rh+=`<tr class="bg-white hover:bg-gray-50 text-xs"><td class="px-2 py-1 whitespace-nowrap">${r['Supplier Name']||''}</td><td class="px-2 py-1 whitespace-nowrap">${r['Document Number (2B)']||''}</td><td class="px-2 py-1 whitespace-nowrap">${r['Document Date (2B)']||''}</td><td class="px-2 py-1 whitespace-nowrap">${r['Type']||''}</td><td class="px-2 py-1 text-right">${formatCurrency(r['Sum of Taxable Value (2B)'],false)}</td><td class="px-2 py-1 text-right font-medium">${formatCurrency(r['Total GST'],false)}</td><td class="px-2 py-1 max-w-[150px] truncate" title="${r['Remarks']||''}">${r['Remarks']||''}</td><td class="px-2 py-1"><select data-id="${r.id}" class="action-select">${oh}</select></td></tr>`;} drilldownTableBody.innerHTML=rh; } catch(e){ showError(`P2 table error: ${e.message}`); console.error("Render P2 err:", e); } }
-                let page3DataFilteredAndSorted = []; function renderPage3Table() { try { const supplierAnalysisBody = document.getElementById('supplier-analysis-body'); if(!supplierAnalysisBody) throw new Error("P3 body missing"); const sfin=document.getElementById('filter-supplier-page3'); const sf=sfin?sfin.value.toLowerCase():''; const gd=groupBySupplierAndTag(filteredData); let td=gd.filter(g=>(g.supplier||'').toLowerCase().includes(sf)); if(currentSortPage3.col) td.sort((a,b)=>sortTableData(a,b,currentSortPage3.col,currentSortPage3.dir)); page3DataFilteredAndSorted=td; const rc=td.length; const dl=MAX_ROWS_DISPLAY; document.getElementById('supplier-row-count').innerText=`Showing ${Math.min(rc,dl)} of ${rc} groups.`; let rh=''; const mlOptions = mailingListCategories.map(c => `<option value="${c}">${c}</option>`).join(''); for(let i=0;i<Math.min(rc,dl);i++){const r=td[i]; const assignmentKey=r.supplier; const currentAssignment=mailingListAssignments[assignmentKey]||'None'; const selectOptions=`<option value="None">-- Select --</option>`+mailingListCategories.map(c=>`<option value="${c}" ${currentAssignment===c?'selected':''}>${c}</option>`).join(''); rh+=`<tr class="bg-white hover:bg-gray-50 text-xs"><td class="px-2 py-1 font-medium whitespace-nowrap">${r.supplier}</td><td class="px-2 py-1 whitespace-nowrap">${r.tag}</td><td class="px-2 py-1 text-right text-red-600 font-medium">${formatCurrency(r.totalGst,false)}</td><td class="px-2 py-1"><select class="add-to-select" data-supplier="${r.supplier.replace(/"/g, '&quot;')}" data-tag="${r.tag.replace(/"/g, '&quot;')}">${selectOptions}</select></td></tr>`;} supplierAnalysisBody.innerHTML=rh; } catch(e){ showError(`P3 table error: ${e.message}`); console.error("Render P3 err:", e); } }
+                let page2DataFilteredAndSorted = []; function renderPage2Table() { try { if(!drilldownTableBody) throw new Error("P2 body missing"); const sfInput = document.getElementById('filter-supplier-page2'); const dfInput = document.getElementById('filter-docnum-page2'); const sf=sfInput ? sfInput.value.toLowerCase() : ''; const df=dfInput ? dfInput.value.toLowerCase() : ''; let td=filteredData.filter(r=>(r['Supplier Name']||'').toLowerCase().includes(sf)&&(String(r['Document Number (2B)']||'')).toLowerCase().includes(df)); if(jtcToggle.checked) { td = td.filter(r => r['Company Name'] === 'JTC'); } if(currentSortPage2.col) td.sort((a,b)=>sortTableData(a,b,currentSortPage2.col,currentSortPage2.dir)); page2DataFilteredAndSorted=td; const rc=td.length; const dl=MAX_ROWS_DISPLAY; document.getElementById('drilldown-row-count').innerText=`Showing ${Math.min(rc,dl)} of ${rc} rows.`; let rh=''; const ao=['None','Followed Up','Invoice Received','Followed up & Closed','No Response']; for(let i=0;i<Math.min(rc,dl);i++){const r=td[i]; const av=actionState[r.id]||'None'; const oh=ao.map(o=>`<option value="${o}" ${av===o?'selected':''}>${o==='None'?'-- Select --':o}</option>`).join(''); rh+=`<tr class="bg-white hover:bg-gray-50 text-xs"><td class="px-2 py-1 whitespace-nowrap">${r['Supplier Name']||''}</td><td class="px-2 py-1 whitespace-nowrap">${r['Document Number (2B)']||''}</td><td class="px-2 py-1 whitespace-nowrap">${r['Document Date (2B)']||''}</td><td class="px-2 py-1 whitespace-nowrap">${r['Type']||''}</td><td class="px-2 py-1 text-right">${formatCurrency(r['Sum of Taxable Value (2B)'],false)}</td><td class="px-2 py-1 text-right font-medium">${formatCurrency(r['Total GST'],false)}</td><td class="px-2 py-1 max-w-[150px] truncate" title="${r['Remarks']||''}">${r['Remarks']||''}</td><td class="px-2 py-1"><select data-id="${r.id}" class="action-select">${oh}</select></td></tr>`;} drilldownTableBody.innerHTML=rh; } catch(e){ showError(`P2 table error: ${e.message}`); console.error("Render P2 err:", e); } }
+                let page3DataFilteredAndSorted = []; function renderPage3Table() { try { const supplierAnalysisBody = document.getElementById('supplier-analysis-body'); if(!supplierAnalysisBody) throw new Error("P3 body missing"); const sfin=document.getElementById('filter-supplier-page3'); const sf=sfin?sfin.value.toLowerCase():''; const gd=groupBySupplierAndTag(filteredData); let td=gd.filter(g=>(g.supplier||'').toLowerCase().includes(sf)); if(currentSortPage3.col) td.sort((a,b)=>sortTableData(a,b,currentSortPage3.col,currentSortPage3.dir)); page3DataFilteredAndSorted=td; const rc=td.length; const dl=MAX_ROWS_DISPLAY; document.getElementById('supplier-row-count').innerText=`Showing ${Math.min(rc,dl)} of ${rc} groups.`; let rh=''; for(let i=0;i<Math.min(rc,dl);i++){const r=td[i]; const assignmentKey=r.supplier; const currentAssignment=mailingListAssignments[assignmentKey]||'None'; const selectOptions=`<option value="None">-- Select --</option>`+mailingListCategories.map(c=>`<option value="${c}" ${currentAssignment===c?'selected':''}>${c}</option>`).join(''); rh+=`<tr class="bg-white hover:bg-gray-50 text-xs"><td class="px-2 py-1 font-medium whitespace-nowrap">${r.supplier}</td><td class="px-2 py-1 whitespace-nowrap">${r.tag}</td><td class="px-2 py-1 text-right text-red-600 font-medium">${formatCurrency(r.totalGst,false)}</td><td class="px-2 py-1"><select class="add-to-select" data-supplier="${r.supplier.replace(/"/g, '&quot;')}">${selectOptions}</select></td></tr>`;} supplierAnalysisBody.innerHTML=rh; } catch(e){ showError(`P3 table error: ${e.message}`); console.error("Render P3 err:", e); } }
                 function groupBySupplierAndTag(data) {
                     if (!data || data.length === 0) return [];
                     console.log("Grouping suppliers for Page 3...");
@@ -664,11 +758,26 @@
                 async function handleAddToMailingList(supplier, tag, selectElement) { // Made async
                     const category = selectElement.value;
                     const key = supplier; // Use supplier name as the key
-                    if (category === 'None') { delete mailingListAssignments[key]; }
-                    else { mailingListAssignments[key] = category; }
+                    if (category === 'None') {
+                        // Remove from the current category if it exists
+                        delete mailingListAssignments[key];
+                    } else {
+                        // If assigning to a new category, ensure it's not in any other category
+                        for (const k in mailingListAssignments) {
+                            if (mailingListAssignments[k] === category && k === key) {
+                                delete mailingListAssignments[k];
+                            }
+                        }
+                        mailingListAssignments[key] = category;
+                    }
                     console.log(`Assignment for ${key}: ${category}`);
-                    try { await saveSingleAssignment(key, category); console.log("Assignment saved."); } // Workaround 2
-                    catch (e) { console.error("Failed to save assignment:", e); showError("Failed to save mailing list assignment."); }
+                    try {
+                        await saveSingleAssignment(key, category);
+                        console.log("Assignment saved.");
+                    } catch (e) {
+                        console.error("Failed to save assignment:", e);
+                        showError("Failed to save mailing list assignment.");
+                    }
                     renderPage3Table();
                 }
                 window.showMailingListPreview = function(category) {
@@ -797,6 +906,8 @@
                  if (companySlicer) companySlicer.addEventListener('change', filterData); else console.warn("Company slicer missing.");
                  if (monthSlicer) monthSlicer.addEventListener('change', filterData); else console.warn("Month slicer missing.");
                  if (tagSlicer) tagSlicer.addEventListener('change', filterData); else console.warn("Tag slicer missing.");
+                 if (fySlicer) fySlicer.addEventListener('change', filterData); else console.warn("FY slicer missing.");
+                 if(jtcToggle) jtcToggle.addEventListener('change', renderPage2Table); else console.warn("JTC toggle missing.");
                  if (filterSupplierPage2) filterSupplierPage2.addEventListener('input', renderPage2Table); else console.warn("Filter Supplier P2 missing.");
                  if (filterDocNumPage2) filterDocNumPage2.addEventListener('input', renderPage2Table); else console.warn("Filter DocNum P2 missing.");
                  if (filterSupplierPage3) filterSupplierPage3.addEventListener('input', renderPage3Table); else console.warn("Filter Supplier P3 missing.");
@@ -863,7 +974,6 @@
                  });
 
                  // --- New Listener for Page 5 Uploader ---
-                 const booksFileUploader = document.getElementById('booksFileUploader');
                  if (booksFileUploader) {
                      booksFileUploader.addEventListener('change', handleBooksFile);
                  } else {
