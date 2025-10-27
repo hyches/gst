@@ -74,7 +74,8 @@
         .btn-secondary:hover { background-color: #4b5563; }
         .btn-danger { background-color: #ef4444; color: white; }
         .btn-danger:hover { background-color: #dc2626; }
-
+        .btn-link { color: #6b7280; text-decoration: underline; font-size: 0.8rem; padding: 0.25rem; }
+        .btn-link:hover { color: #1f2937; }
 
         /* Print specific styles */
          @media print {
@@ -93,7 +94,7 @@
 
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen"> <!-- Removed state-loading -->
+<body class="bg-slate-900 min-h-screen bg-gradient-to-br from-slate-900 to-slate-700"> <!-- Removed state-loading -->
 
     <!-- Error Message -->
     <div id="error-message">
@@ -110,22 +111,23 @@
      </div>
     <!-- Uploader Section (Hidden by default via CSS) -->
      <div id="startupScreen" class="flex flex-col items-center justify-center min-h-screen p-4 text-center" style="display: none;">
-         <div class="visual-container max-w-md w-full">
-             <svg class="mx-auto h-10 w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-            <h2 class="mt-3 text-lg font-semibold text-gray-800">GST Dashboard</h2>
-            <p class="mt-1 text-xs text-gray-600">Choose an option to begin.</p>
+         <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full">
+            <svg class="mx-auto h-12 w-12 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 00-1.883 2.542l.857 6a2.25 2.25 0 002.227 1.932H19.05a2.25 2.25 0 002.227-1.932l.857-6a2.25 2.25 0 00-1.883-2.542m-16.5 0V6A2.25 2.25 0 016 3.75h3.879a1.5 1.5 0 011.06.44l2.122 2.12a1.5 1.5 0 001.06.44H18A2.25 2.25 0 0120.25 9v.776" />
+            </svg>
+            <h2 class="mt-4 text-2xl font-bold text-gray-800">GST Reconciliation Pro</h2>
+            <p class="mt-2 text-sm text-gray-600">Get started by uploading your Excel file or using previously saved data.</p>
 
-            <!-- Hidden file input, still linked to the label -->
             <input type="file" id="fileUploader" class="hidden" accept=".xlsx, .xls">
 
-            <div class="mt-6 flex flex-col gap-3">
-                 <!-- Label styled as a button -->
-                <label for="fileUploader" id="btnUploadNew" class="btn btn-primary">Upload New Excel File</label>
-                <!-- Actual buttons for other actions -->
-                <button id="btnLoadSaved" class="btn btn-secondary">Use Saved Data</button>
-                <button id="btnClearSaved" class="btn btn-danger text-xs">Clear Saved Data</button>
+            <div class="mt-6 flex flex-col gap-4">
+                <label for="fileUploader" id="btnUploadNew" class="btn btn-primary w-full text-base">Upload New Excel File</label>
+                <button id="btnLoadSaved" class="btn btn-secondary w-full text-base">Use Saved Data</button>
             </div>
-            <p id="upload-status" class="mt-4 text-sm text-gray-500"></p>
+             <div class="mt-6">
+                <button id="btnClearSaved" class="btn-link">Clear Saved Data</button>
+            </div>
+            <p id="upload-status" class="mt-4 text-sm text-gray-500 h-5"></p>
         </div>
      </div>
 
@@ -628,7 +630,7 @@
                 }
 
                 let page2DataFilteredAndSorted = []; function renderPage2Table() { try { if(!drilldownTableBody) throw new Error("P2 body missing"); const sfInput = document.getElementById('filter-supplier-page2'); const dfInput = document.getElementById('filter-docnum-page2'); const sf=sfInput ? sfInput.value.toLowerCase() : ''; const df=dfInput ? dfInput.value.toLowerCase() : ''; let td=filteredData.filter(r=>(r['Supplier Name']||'').toLowerCase().includes(sf)&&(String(r['Document Number (2B)']||'')).toLowerCase().includes(df)); if(currentSortPage2.col) td.sort((a,b)=>sortTableData(a,b,currentSortPage2.col,currentSortPage2.dir)); page2DataFilteredAndSorted=td; const rc=td.length; const dl=MAX_ROWS_DISPLAY; document.getElementById('drilldown-row-count').innerText=`Showing ${Math.min(rc,dl)} of ${rc} rows.`; let rh=''; const ao=['None','Followed Up','Invoice Received','Followed up & Closed','No Response']; for(let i=0;i<Math.min(rc,dl);i++){const r=td[i]; const av=actionState[r.id]||'None'; const oh=ao.map(o=>`<option value="${o}" ${av===o?'selected':''}>${o==='None'?'-- Select --':o}</option>`).join(''); rh+=`<tr class="bg-white hover:bg-gray-50 text-xs"><td class="px-2 py-1 whitespace-nowrap">${r['Supplier Name']||''}</td><td class="px-2 py-1 whitespace-nowrap">${r['Document Number (2B)']||''}</td><td class="px-2 py-1 whitespace-nowrap">${r['Document Date (2B)']||''}</td><td class="px-2 py-1 whitespace-nowrap">${r['Type']||''}</td><td class="px-2 py-1 text-right">${formatCurrency(r['Sum of Taxable Value (2B)'],false)}</td><td class="px-2 py-1 text-right font-medium">${formatCurrency(r['Total GST'],false)}</td><td class="px-2 py-1 max-w-[150px] truncate" title="${r['Remarks']||''}">${r['Remarks']||''}</td><td class="px-2 py-1"><select data-id="${r.id}" class="action-select">${oh}</select></td></tr>`;} drilldownTableBody.innerHTML=rh; } catch(e){ showError(`P2 table error: ${e.message}`); console.error("Render P2 err:", e); } }
-                let page3DataFilteredAndSorted = []; function renderPage3Table() { try { const supplierAnalysisBody = document.getElementById('supplier-analysis-body'); if(!supplierAnalysisBody) throw new Error("P3 body missing"); const sfin=document.getElementById('filter-supplier-page3'); const sf=sfin?sfin.value.toLowerCase():''; const gd=groupBySupplierAndTag(filteredData); let td=gd.filter(g=>(g.supplier||'').toLowerCase().includes(sf)); if(currentSortPage3.col) td.sort((a,b)=>sortTableData(a,b,currentSortPage3.col,currentSortPage3.dir)); page3DataFilteredAndSorted=td; const rc=td.length; const dl=MAX_ROWS_DISPLAY; document.getElementById('supplier-row-count').innerText=`Showing ${Math.min(rc,dl)} of ${rc} groups.`; let rh=''; const mlOptions = mailingListCategories.map(c => `<option value="${c}">${c}</option>`).join(''); for(let i=0;i<Math.min(rc,dl);i++){const r=td[i]; const assignmentKey=`${r.supplier}|${r.tag}`; const currentAssignment=mailingListAssignments[assignmentKey]||'None'; const selectOptions=`<option value="None">-- Select --</option>`+mailingListCategories.map(c=>`<option value="${c}" ${currentAssignment===c?'selected':''}>${c}</option>`).join(''); rh+=`<tr class="bg-white hover:bg-gray-50 text-xs"><td class="px-2 py-1 font-medium whitespace-nowrap">${r.supplier}</td><td class="px-2 py-1 whitespace-nowrap">${r.tag}</td><td class="px-2 py-1 text-right text-red-600 font-medium">${formatCurrency(r.totalGst,false)}</td><td class="px-2 py-1"><select class="add-to-select" data-supplier="${r.supplier.replace(/"/g, '&quot;')}" data-tag="${r.tag.replace(/"/g, '&quot;')}">${selectOptions}</select></td></tr>`;} supplierAnalysisBody.innerHTML=rh; } catch(e){ showError(`P3 table error: ${e.message}`); console.error("Render P3 err:", e); } }
+                let page3DataFilteredAndSorted = []; function renderPage3Table() { try { const supplierAnalysisBody = document.getElementById('supplier-analysis-body'); if(!supplierAnalysisBody) throw new Error("P3 body missing"); const sfin=document.getElementById('filter-supplier-page3'); const sf=sfin?sfin.value.toLowerCase():''; const gd=groupBySupplierAndTag(filteredData); let td=gd.filter(g=>(g.supplier||'').toLowerCase().includes(sf)); if(currentSortPage3.col) td.sort((a,b)=>sortTableData(a,b,currentSortPage3.col,currentSortPage3.dir)); page3DataFilteredAndSorted=td; const rc=td.length; const dl=MAX_ROWS_DISPLAY; document.getElementById('supplier-row-count').innerText=`Showing ${Math.min(rc,dl)} of ${rc} groups.`; let rh=''; const mlOptions = mailingListCategories.map(c => `<option value="${c}">${c}</option>`).join(''); for(let i=0;i<Math.min(rc,dl);i++){const r=td[i]; const assignmentKey=r.supplier; const currentAssignment=mailingListAssignments[assignmentKey]||'None'; const selectOptions=`<option value="None">-- Select --</option>`+mailingListCategories.map(c=>`<option value="${c}" ${currentAssignment===c?'selected':''}>${c}</option>`).join(''); rh+=`<tr class="bg-white hover:bg-gray-50 text-xs"><td class="px-2 py-1 font-medium whitespace-nowrap">${r.supplier}</td><td class="px-2 py-1 whitespace-nowrap">${r.tag}</td><td class="px-2 py-1 text-right text-red-600 font-medium">${formatCurrency(r.totalGst,false)}</td><td class="px-2 py-1"><select class="add-to-select" data-supplier="${r.supplier.replace(/"/g, '&quot;')}" data-tag="${r.tag.replace(/"/g, '&quot;')}">${selectOptions}</select></td></tr>`;} supplierAnalysisBody.innerHTML=rh; } catch(e){ showError(`P3 table error: ${e.message}`); console.error("Render P3 err:", e); } }
                 function groupBySupplierAndTag(data) {
                     if (!data || data.length === 0) return [];
                     console.log("Grouping suppliers for Page 3...");
@@ -661,7 +663,7 @@
                 function renderMailingListCategories() { const div = document.getElementById('mailingListCategories'); if(div) div.innerHTML = mailingListCategories.map(cat => `<button onclick="showMailingListPreview('${cat}')" class="bg-blue-100 text-blue-700 px-3 py-1 rounded text-sm hover:bg-blue-200">${cat}</button>`).join(''); }
                 async function handleAddToMailingList(supplier, tag, selectElement) { // Made async
                     const category = selectElement.value;
-                    const key = `${supplier}|${tag}`;
+                    const key = supplier; // Use supplier name as the key
                     if (category === 'None') { delete mailingListAssignments[key]; }
                     else { mailingListAssignments[key] = category; }
                     console.log(`Assignment for ${key}: ${category}`);
@@ -677,8 +679,8 @@
                      const previewArea = document.getElementById('mailingListPreviewArea');
                      if (!modal || !title || !previewArea) return;
                      title.textContent = `Mailing List: ${category}`;
-                     const itemsInCategory = Object.entries(mailingListAssignments).filter(([key, cat]) => cat === category).map(([key, cat]) => key);
-                     let previewData = allData.filter(row => { const key = `${row['Supplier Name']}|${row['Type']}`; return itemsInCategory.includes(key); });
+                     const suppliersInCategory = Object.keys(mailingListAssignments).filter(key => mailingListAssignments[key] === category);
+                     let previewData = allData.filter(row => suppliersInCategory.includes(row['Supplier Name']));
                      let latestMonthNum = 0;
                      for (const r of allData) { latestMonthNum = Math.max(latestMonthNum, getMonthNumber(r['Month'])); }
                      const resolvedDocs = new Set();
@@ -695,8 +697,8 @@
                 window.exportMailingList = function() {
                      if (!currentMailingListCategory) return;
                      console.log("Exporting mailing list for:", currentMailingListCategory);
-                     const itemsInCategory = Object.entries(mailingListAssignments).filter(([key, cat]) => cat === currentMailingListCategory).map(([key, cat]) => key);
-                     let previewData = allData.filter(row => { const key = `${row['Supplier Name']}|${row['Type']}`; return itemsInCategory.includes(key); });
+                     const suppliersInCategory = Object.keys(mailingListAssignments).filter(key => mailingListAssignments[key] === currentMailingListCategory);
+                     let previewData = allData.filter(row => suppliersInCategory.includes(row['Supplier Name']));
                      let latestMonthNum = 0;
                      for (const r of allData) { latestMonthNum = Math.max(latestMonthNum, getMonthNumber(r['Month'])); }
                      const resolvedDocs = new Set();
