@@ -316,7 +316,7 @@
         let currentSortPage3 = { col: 'totalGst', dir: 'desc' };
         const MAX_ROWS_DISPLAY = 5000;
         let mailingListAssignments = {};
-        const mailingListCategories = ["Admin", "HR", "EA", "IT", "KS", "DC", "Investment"];
+        const mailingListCategories = ["Admin", "HR", "EA", "IT", "KS", "DC", "Investment", "Manikant", "Neha", "Suresh", "Ashok"];
         let currentMailingListCategory = null;
         const monthMap = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
         const DB_NAME = "GSTDashboardDB";
@@ -465,11 +465,10 @@
                 const clearActionsBtn = document.getElementById('clearActionsBtn');
                 const clearAssignmentsBtn = document.getElementById('clearAssignmentsBtn');
                 const clearAllMailingListsBtn = document.getElementById('clearAllMailingListsBtn');
-                const booksFileUploader = document.getElementById('booksFileUploader');
                 const validationStatus = document.getElementById('validation-status');
 
                 // Check for crucial elements
-                if (!startupScreen || !dashboardDiv || !fileInput || !btnLoadSaved || !btnClearSaved || !clearDataBtnHeader || !booksFileUploader) {
+                if (!startupScreen || !dashboardDiv || !fileInput || !btnLoadSaved || !btnClearSaved || !clearDataBtnHeader) {
                     throw new Error("Critical UI elements are missing. Cannot initialize.");
                 }
 
@@ -520,7 +519,8 @@
                             rd.forEach(row => {
                                 const docNum = row[voucherCol] ? String(row[voucherCol]).trim() : '';
                                 const gstin = row[gstinCol] ? String(row[gstinCol]).trim() : '';
-                                if (docNum && gstin) {
+                                // A valid GSTIN is 15 characters.
+                                if (docNum && gstin && gstin.length >= 15) {
                                     booksLookup.add(`${docNum}|${gstin}`);
                                 }
                             });
@@ -721,100 +721,6 @@
                 function setSlicerValue(slicer, valMatch) { if(!slicer||!valMatch) return false; const lowerM=valMatch.toLowerCase(); for(let i=0; i<slicer.options.length; i++){const optV=slicer.options[i].value; const optT=slicer.options[i].textContent; if(slicer.id==='companySlicer'){if(optV.toLowerCase().includes(lowerM)||optT.toLowerCase().includes(lowerM)){slicer.value=optV; console.log(`Chatbot set ${slicer.id}: ${optV}`); return true;}} else {if(optV.toLowerCase()===lowerM||optT.toLowerCase()===lowerM){slicer.value=optV; console.log(`Chatbot set ${slicer.id}: ${optV}`); return true;}}} console.warn(`Chatbot no match for "${valMatch}" in ${slicer.id}`); return false; }
                 function showDetailsPreview(data, title) { currentMailingListCategory = title; const modal = document.getElementById('mailingListModal'); const modalTitle = document.getElementById('mailingListModalTitle'); const previewArea = document.getElementById('mailingListPreviewArea'); if (!modal||!modalTitle||!previewArea) return; modalTitle.textContent = title; let thtml = `<table class="w-full text-left table-auto border-collapse"><thead><tr class="bg-gray-100 text-xs uppercase"><th class="border p-1">Supplier</th><th class="border p-1">Doc Num</th><th class="border p-1">Doc Date</th><th class="border p-1">Tag</th><th class="border p-1 text-right">Taxable</th><th class="border p-1 text-right">Total GST</th><th class="border p-1">Remarks</th><th class="border p-1">Action</th></tr></thead><tbody>`; if (data.length > 0) { data.forEach(r => { thtml += `<tr class="text-xs"><td class="border p-1">${r['Supplier Name']||''}</td><td class="border p-1">${r['Document Number (2B)']||''}</td><td class="border p-1">${r['Document Date (2B)']||''}</td><td class="border p-1">${r['Type']||''}</td><td class="border p-1 text-right">${formatCurrency(r['Sum of Taxable Value (2B)'],false)}</td><td class="border p-1 text-right">${formatCurrency(r['Total GST'],false)}</td><td class="border p-1">${r['Remarks']||''}</td><td class="border p-1">${actionState[r.id]||'None'}</td></tr>`; }); } else { thtml += `<tr><td colspan="8" class="text-center p-4 text-gray-500">No data found.</td></tr>`; } thtml += `</tbody></table>`; previewArea.innerHTML = thtml; modal.style.display = 'flex'; }
 
-                async function handleBooksFile(event) {
-                    console.log("Books file selected.");
-                    const file = event.target.files[0];
-                    if (!file) return;
-                    if (allData.length === 0) {
-                        showError("Please load the main transaction data first.");
-                        return;
-                    }
-                    showLoader("Reading Books file...");
-                    const validationStatus = document.getElementById('validation-status');
-                    validationStatus.textContent = "Reading Books file...";
-                    validationStatus.classList.remove('text-red-600', 'text-green-600');
-                    hideError();
-
-                    if (typeof XLSX==='undefined') { showError("Excel lib failed."); return; }
-                    const reader = new FileReader();
-                    reader.onload = async function(e) {
-                        try {
-                            showLoader("Validating transactions...");
-                            console.log("Processing Books file...");
-                            const data = new Uint8Array(e.target.result);
-                            const wb = XLSX.read(data, { type: 'array' });
-                            const sn = wb.SheetNames[0]; // Assume first sheet
-                            if (!sn) throw new Error("No sheets found in Books file.");
-
-                            const rd = XLSX.utils.sheet_to_json(wb.Sheets[sn]);
-                            if (!Array.isArray(rd) || rd.length === 0) throw new Error(`No data found in '${sn}' sheet.`);
-
-                            const booksLookup = new Set();
-                            let voucherCol, gstinCol;
-                            if (rd.length > 0) {
-                                const headers = Object.keys(rd[0]);
-                                voucherCol = headers.find(h => h.trim().toLowerCase() === 'voucher ref. no.');
-                                gstinCol = headers.find(h => h.trim().toLowerCase() === 'gstin/uin');
-                            }
-                            if (!voucherCol || !gstinCol) {
-                                throw new Error("Columns 'Voucher Ref. No.' or 'GSTIN/UIN' not found in Books file.");
-                            }
-
-                            rd.forEach(row => {
-                                const docNum = row[voucherCol] ? String(row[voucherCol]).trim() : '';
-                                const gstin = row[gstinCol] ? String(row[gstinCol]).trim() : '';
-                                if (docNum && gstin) {
-                                    booksLookup.add(`${docNum}|${gstin}`);
-                                }
-                            });
-                            console.log(`Created Books lookup with ${booksLookup.size} items.`);
-
-                            let updateCount = 0;
-                            allData.forEach(row => {
-                                const tag = row['Type'];
-                                if (tag === 'Missing_in_PR_Current_Month' || tag === 'Missing_in_PR_Cumulative') {
-                                    const docNum = String(row['Document Number (2B)'] || '').trim();
-                                    const gstin = String(row['Supplier GSTIN (2B)'] || '').trim();
-                                    const key = `${docNum}|${gstin}`;
-
-                                    if (docNum && gstin && booksLookup.has(key)) {
-                                        if (actionState[row.id] !== "Invoice Received") {
-                                            actionState[row.id] = "Invoice Received";
-                                            updateCount++;
-                                        }
-                                    }
-                                }
-                            });
-
-                            console.log(`Validation complete. ${updateCount} rows updated.`);
-
-                            if (updateCount > 0) {
-                                showLoader("Saving updates...");
-                                if (!db) await openDB();
-                                // Save all actions (bulk)
-                                const actionsArray = Object.entries(actionState).map(([id, value]) => ({ id, value }));
-                                await bulkSaveData(ACTIONS_STORE_NAME, actionsArray, false); // false = not bulk object
-                                console.log("Updated actions saved to DB.");
-                                renderPage2Table(); // Refresh Page 2 table
-                            }
-
-                            validationStatus.textContent = `Validation complete. ${updateCount} transactions were updated to "Invoice Received".`;
-                            validationStatus.classList.add('text-green-600');
-
-                        } catch (error) {
-                            showError(`Validation Error: ${error.message}`);
-                            validationStatus.textContent = `Error: ${error.message}`;
-                            validationStatus.classList.add('text-red-600');
-                        } finally {
-                            hideLoader();
-                            if(booksFileUploader) booksFileUploader.value = null;
-                        }
-                    };
-                    reader.onerror = function(re) { showError("Error reading Books file."); if (booksFileUploader) booksFileUploader.value = null; console.error("Read err:", re);};
-                    reader.readAsArrayBuffer(file);
-                }
-
-
                 // --- Event Listeners Initialization ---
                 console.log("Attaching event listeners...");
                  if (!fileInput) throw new Error("File input missing!"); fileInput.addEventListener('change', handleFile);
@@ -982,16 +888,6 @@
             }
 
         }); // End of DOMContentLoaded
-    } catch (globalError) { // Catch errors BEFORE DOMContentLoaded
-         console.error("Global script error (before DOMContentLoaded):", globalError);
-         alert(`Critical Error during script load: ${globalError.message}. Please refresh the page.`);
-         try { // Try manual fallback
-             const startupScreen = document.getElementById('startupScreen');
-             const loaderOverlay = document.getElementById('loader-overlay');
-             if (startupScreen) startupScreen.style.display = 'flex';
-             if (loaderOverlay) loaderOverlay.style.display = 'none';
-          } catch(e){}
-    }
     </script>
 
 </body>
