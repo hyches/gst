@@ -74,8 +74,7 @@
         .btn-secondary:hover { background-color: #4b5563; }
         .btn-danger { background-color: #ef4444; color: white; }
         .btn-danger:hover { background-color: #dc2626; }
-        .btn-link { color: #6b7280; text-decoration: underline; font-size: 0.8rem; padding: 0.25rem; }
-        .btn-link:hover { color: #1f2937; }
+
 
         /* Print specific styles */
          @media print {
@@ -94,7 +93,7 @@
 
     </style>
 </head>
-<body class="bg-slate-900 min-h-screen bg-gradient-to-br from-slate-900 to-slate-700"> <!-- Removed state-loading -->
+<body class="bg-gray-100 min-h-screen"> <!-- Removed state-loading -->
 
     <!-- Error Message -->
     <div id="error-message">
@@ -110,26 +109,38 @@
         </div>
      </div>
     <!-- Uploader Section (Hidden by default via CSS) -->
-     <div id="startupScreen" class="flex flex-col items-center justify-center min-h-screen p-4 text-center" style="display: none;">
-         <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full">
-            <svg class="mx-auto h-12 w-12 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 00-1.883 2.542l.857 6a2.25 2.25 0 002.227 1.932H19.05a2.25 2.25 0 002.227-1.932l.857-6a2.25 2.25 0 00-1.883-2.542m-16.5 0V6A2.25 2.25 0 016 3.75h3.879a1.5 1.5 0 011.06.44l2.122 2.12a1.5 1.5 0 001.06.44H18A2.25 2.25 0 0120.25 9v.776" />
-            </svg>
-            <h2 class="mt-4 text-2xl font-bold text-gray-800">GST Reconciliation Pro</h2>
-            <p class="mt-2 text-sm text-gray-600">Get started by uploading your Excel file or using previously saved data.</p>
-
+    <div id="startupScreen" class="flex items-center justify-center min-h-screen bg-gray-50" style="display: none;">
+        <div class="w-full max-w-lg p-8 space-y-8 bg-white rounded-2xl shadow-lg">
+            
+            <div class="text-center">
+                <svg class="mx-auto h-12 w-12 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2a4 4 0 00-4-4H3a2 2 0 00-2 2v2a2 2 0 002 2h2a4 4 0 004-4zm0-8V7a4 4 0 014-4h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a4 4 0 01-4-4z" />
+                </svg>
+                <h1 class="mt-4 text-3xl font-bold text-gray-900">GST Reconciliation</h1>
+                <p class="mt-2 text-sm text-gray-600">Streamline your GST data analysis. Begin by uploading a new file or loading your previously saved session.</p>
+            </div>
+            
             <input type="file" id="fileUploader" class="hidden" accept=".xlsx, .xls">
+            
+            <div class="space-y-4">
+                <label for="fileUploader" id="btnUploadNew" class="flex items-center justify-center w-full px-4 py-3 text-sm font-semibold text-white bg-blue-600 rounded-lg shadow-md cursor-pointer hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105">
+                    <svg class="w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                    Upload New Excel File
+                </label>
+                
+                <button id="btnLoadSaved" class="flex items-center justify-center w-full px-4 py-3 text-sm font-semibold text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 transition-transform transform hover:scale-105">
+                     <svg class="w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5V4H4zm0 9h5v5H4v-5zm9-9h5v5h-5V4zm0 9h5v5h-5v-5z" /></svg>
+                    Use Saved Data
+                </button>
+            </div>
 
-            <div class="mt-6 flex flex-col gap-4">
-                <label for="fileUploader" id="btnUploadNew" class="btn btn-primary w-full text-base">Upload New Excel File</label>
-                <button id="btnLoadSaved" class="btn btn-secondary w-full text-base">Use Saved Data</button>
+            <div class="text-center">
+                 <button id="btnClearSaved" class="text-xs text-red-500 hover:text-red-700 hover:underline focus:outline-none">Clear Saved Data</button>
             </div>
-             <div class="mt-6">
-                <button id="btnClearSaved" class="btn-link">Clear Saved Data</button>
-            </div>
-            <p id="upload-status" class="mt-4 text-sm text-gray-500 h-5"></p>
+            
+            <p id="upload-status" class="mt-4 text-sm text-center text-gray-500"></p>
         </div>
-     </div>
+    </div>
 
     <!-- Dashboard (Hidden by default via CSS) -->
     <div id="dashboard" class="flex-col min-h-screen" style="display: none;"> <!-- Start hidden -->
@@ -139,8 +150,8 @@
                 <h1 class="text-lg font-bold text-gray-800 shrink-0">GST Reconciliation</h1>
                 <div class="flex flex-wrap justify-center md:justify-end gap-2 w-full items-center"> <!-- Added items-center -->
                     <div class="slicer w-full sm:w-auto md:w-40"><label id="companyLabel" for="companySlicer" class="slicer-title">Company</label><select id="companySlicer" aria-labelledby="companyLabel" class="w-full p-1 border rounded bg-white text-xs"></select></div>
+                    <div class="slicer w-full sm:w-auto md:w-28"><label id="fyLabel" for="fySlicer" class="slicer-title">FY</label><select id="fySlicer" aria-labelledby="fyLabel" class="w-full p-1 border rounded bg-white text-xs"></select></div>
                     <div class="slicer w-full sm:w-auto md:w-32"><label id="monthLabel" for="monthSlicer" class="slicer-title">Month</label><select id="monthSlicer" aria-labelledby="monthLabel" class="w-full p-1 border rounded bg-white text-xs"></select></div>
-                    <div class="slicer w-full sm:w-auto md:w-32"><label id="fyLabel" for="fySlicer" class="slicer-title">FY</label><select id="fySlicer" aria-labelledby="fyLabel" class="w-full p-1 border rounded bg-white text-xs"></select></div>
                     <div class="slicer w-full sm:w-auto md:w-48"><label id="tagLabel" for="tagSlicer" class="slicer-title">Tag (Type)</label><select id="tagSlicer" aria-labelledby="tagLabel" class="w-full p-1 border rounded bg-white text-xs"></select></div>
                     <!-- New Clear Button for Dashboard -->
                     <button id="clearDataBtnHeader" class="clear-button px-3 py-1 ml-2">Clear & Upload New</button>
@@ -180,11 +191,18 @@
                 <div class="visual-container w-full">
                     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-2 gap-2">
                         <h2 class="visual-title text-xl font-semibold text-gray-700">Transaction Drilldown</h2>
-                        <div class="flex gap-2 items-center">
-                             <label for="jtcToggle" class="text-sm font-medium text-gray-700">Show JTC Only:</label>
-                             <input type="checkbox" id="jtcToggle" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                             <button id="clearActionsBtn" class="clear-button px-3 py-1">Clear Actions</button>
-                             <button id="export-btn-page2" class="bg-green-500 text-white px-3 py-1 rounded text-xs font-semibold hover:bg-green-600">Export CSV</button>
+                        <div class="flex items-center gap-4">
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">View:</label>
+                                <div class="inline-flex rounded-md shadow-sm ml-2" role="group">
+                                    <button type="button" id="toggleMV" class="px-3 py-1 text-xs font-medium text-white bg-blue-600 border border-gray-200 rounded-l-lg hover:bg-blue-700 focus:z-10 focus:ring-2 focus:ring-blue-500">MV</button>
+                                    <button type="button" id="toggleJTC" class="px-3 py-1 text-xs font-medium text-gray-900 bg-white border border-gray-200 rounded-r-md hover:bg-gray-100 focus:z-10 focus:ring-2 focus:ring-blue-500">JTC</button>
+                                </div>
+                            </div>
+                            <div class="flex gap-2">
+                                <button id="clearActionsBtn" class="clear-button px-3 py-1">Clear Actions</button>
+                                <button id="export-btn-page2" class="bg-green-500 text-white px-3 py-1 rounded text-xs font-semibold hover:bg-green-600">Export CSV</button>
+                            </div>
                         </div>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2 p-2 bg-gray-50 rounded">
@@ -260,32 +278,12 @@
                 <h2 class="visual-title text-xl font-semibold text-gray-700">Validate with Books</h2>
                 <div class="visual-container">
                     <h3 class="font-medium mb-2">Validate 'Missing in PR' against Books Data</h3>
-                    <p class="text-sm text-gray-600 mb-4">Upload your 'Books' Excel file. The script will find matches for 'Missing_in_PR...' tags based on selected criteria and automatically update their status to "Invoice Received".</p>
-
-                    <div class="flex items-center gap-4 mb-4">
-                        <input type="file" id="booksFileUploader" class="hidden" accept=".xlsx, .xls">
-                        <label for="booksFileUploader" class="btn btn-primary">Upload 'Books' Excel File</label>
-                        <select id="validationCriteria" class="p-1 border rounded bg-white text-xs">
-                            <option value="doc_gstin">Doc Number & GSTIN</option>
-                            <option value="doc_supplier">Doc Number & Supplier Name</option>
-                        </select>
-                        <button id="runValidation" class="btn btn-secondary">Run Validation</button>
-                    </div>
-
+                    <p class="text-sm text-gray-600 mb-4">Upload your 'Books' Excel file. The script will find matches for 'Missing_in_PR...' tags based on **Doc Number & GSTIN** and automatically update their status to "Invoice Received".</p>
+                    
+                    <input type="file" id="booksFileUploader" class="hidden" accept=".xlsx, .xls">
+                    <label for="booksFileUploader" class="btn btn-primary">Upload 'Books' Excel File</label>
+                    
                     <p id="validation-status" class="mt-4 text-sm text-gray-500">Ready for validation file.</p>
-
-                    <div id="validation-results-container" class="mt-4 hidden">
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <h4 class="font-semibold">Matched Transactions</h4>
-                                <div id="matched-transactions" class="table-container h-64"></div>
-                            </div>
-                            <div>
-                                <h4 class="font-semibold">Unmatched Transactions</h4>
-                                <div id="unmatched-transactions" class="table-container h-64"></div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
 
@@ -300,9 +298,9 @@
                      <p class="text-gray-500">Loading preview...</p>
                 </div>
                 <div class="flex justify-end gap-3 mt-4 pt-3 border-t">
-                     <button onclick="exportMailingList()" class="bg-green-500 text-white px-4 py-1.5 rounded text-sm hover:bg-green-600">Export CSV</button>
-                     <button onclick="printPreviewContent()" class="bg-gray-500 text-white px-4 py-1.5 rounded text-sm hover:bg-gray-600">Print</button>
-                     <button onclick="closeMailingListModal()" class="bg-red-500 text-white px-4 py-1.5 rounded text-sm hover:bg-red-600">Close</button>
+                    <button onclick="sendMail()" class="bg-blue-600 text-white px-4 py-1.5 rounded text-sm hover:bg-blue-700">Download & Draft Mail</button>
+                    <button onclick="printPreviewContent()" class="bg-gray-500 text-white px-4 py-1.5 rounded text-sm hover:bg-gray-600">Print</button>
+                    <button onclick="closeMailingListModal()" class="bg-red-500 text-white px-4 py-1.5 rounded text-sm hover:bg-red-600">Close</button>
                 </div>
             </div>
         </div>
@@ -335,11 +333,12 @@
         let allData = [];
         let filteredData = [];
         let actionState = {};
+        let isJTCView = false; // State for the JTC toggle
         let currentSortPage2 = { col: null, dir: null };
         let currentSortPage3 = { col: 'totalGst', dir: 'desc' };
         const MAX_ROWS_DISPLAY = 5000;
         let mailingListAssignments = {};
-        const mailingListCategories = ["Admin", "HR", "EA", "IT", "KS", "DC", "Investment", "Manikant", "Neha", "Suresh", "Ashok"];
+        const mailingListCategories = ["Admin", "HR", "EA", "IT", "KS", "DC", "Investment"];
         let currentMailingListCategory = null;
         const monthMap = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
         const DB_NAME = "GSTDashboardDB";
@@ -363,7 +362,7 @@
         window.toggleChatbot = function() { const cb = document.getElementById('chatbotSidebar'); if (cb) cb.classList.toggle('open'); }
         window.closeMailingListModal = function() { const modal = document.getElementById('mailingListModal'); if (modal) modal.style.display = 'none'; currentMailingListCategory = null; }
         window.printPreviewContent = function() { console.log("Attempting controlled print..."); try { window.print(); } catch(e){ showError("Print failed: " + e.message); console.error("Print error:", e); } }
-
+        
         // --- IndexedDB Functions (Optimized) ---
         function openDB() {
             return new Promise((resolve, reject) => {
@@ -457,7 +456,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             try {
                 console.log("DOM loaded. Initializing script...");
-
+                
                 // --- DOM Elements (Must be fetched *inside* DOMContentLoaded) ---
                 const startupScreen = document.getElementById('startupScreen');
                 const dashboardDiv = document.getElementById('dashboard');
@@ -467,16 +466,15 @@
                 const btnClearSaved = document.getElementById('btnClearSaved');
                 const clearDataBtnHeader = document.getElementById('clearDataBtnHeader');
                 const companySlicer = document.getElementById('companySlicer');
+                const fySlicer = document.getElementById('fySlicer');
                 const monthSlicer = document.getElementById('monthSlicer');
                 const tagSlicer = document.getElementById('tagSlicer');
-                const fySlicer = document.getElementById('fySlicer');
                 const exportBtnPage2 = document.getElementById('export-btn-page2');
                 const exportBtnPage3 = document.getElementById('export-btn-page3');
                 const filterSupplierPage2 = document.getElementById('filter-supplier-page2');
                 const filterDocNumPage2 = document.getElementById('filter-docnum-page2');
                 const filterSupplierPage3 = document.getElementById('filter-supplier-page3');
                 const drilldownTableBody = document.getElementById('drilldown-table-body');
-                const jtcToggle = document.getElementById('jtcToggle');
                 const supplierAnalysisBody = document.getElementById('supplier-analysis-body');
                 const mailingListCategoriesDiv = document.getElementById('mailingListCategories');
                 const mailingListModal = document.getElementById('mailingListModal');
@@ -490,16 +488,60 @@
                 const clearActionsBtn = document.getElementById('clearActionsBtn');
                 const clearAssignmentsBtn = document.getElementById('clearAssignmentsBtn');
                 const clearAllMailingListsBtn = document.getElementById('clearAllMailingListsBtn');
-                const validationStatus = document.getElementById('validation-status');
                 const booksFileUploader = document.getElementById('booksFileUploader');
+                const validationStatus = document.getElementById('validation-status');
 
                 // Check for crucial elements
-                if (!startupScreen || !dashboardDiv || !fileInput || !btnLoadSaved || !btnClearSaved || !clearDataBtnHeader) {
+                if (!startupScreen || !dashboardDiv || !fileInput || !btnLoadSaved || !btnClearSaved || !clearDataBtnHeader || !booksFileUploader) {
                     throw new Error("Critical UI elements are missing. Cannot initialize.");
                 }
-
+                
                 // --- Core Data Processing ---
-                function processUploadedData(rawData) { console.log("Processing", rawData.length, "rows..."); if (!Array.isArray(rawData)) throw new Error("Data invalid."); const p = rawData.map((row, index) => { try { if (typeof row !== 'object' || row === null) return null; const nr = { id: `row_${index}` }; Object.keys(row).forEach(key => { if (key && !key.startsWith('__EMPTY')) { nr[key.trim()] = row[key]; } }); const tv = nr['Type'] ?? nr['Tag (Type)']; nr['Type'] = tv ? String(tv).trim() : ""; nr['Sum of Taxable Value (2B)'] = parseCurrency(nr['Sum of Taxable Value (2B)']); nr['Sum of IGST (2B)'] = parseCurrency(nr['Sum of IGST (2B)']); nr['Sum of CGST (2B)'] = parseCurrency(nr['Sum of CGST (2B)']); nr['Sum of SGST (2B)'] = parseCurrency(nr['Sum of SGST (2B)']); nr['Total GST'] = (nr['Sum of IGST (2B)'] || 0) + (nr['Sum of CGST (2B)'] || 0) + (nr['Sum of SGST (2B)'] || 0); let dd = nr['Document Date (2B)']; if (dd instanceof Date) { nr['Document Date (2B)'] = dd.toLocaleDateString('en-IN', {day:'2-digit',month:'2-digit',year:'numeric'}); } else if (!(dd && typeof dd === 'string' && dd.match(/^\d{1,2}-\d{1,2}-\d{4}$/))) { nr['Document Date (2B)'] = ''; } nr['Remarks'] = nr['Remarks'] ? String(nr['Remarks']) : ''; nr['Supplier Name'] = nr['Supplier Name'] ? String(nr['Supplier Name']) : 'Unknown'; nr['Document Number (2B)'] = nr['Document Number (2B)'] ? String(nr['Document Number (2B)']) : ''; nr['Company Name'] = nr['Company Name'] ? String(nr['Company Name']) : 'Unknown'; nr['Month'] = nr['Month'] ? String(nr['Month']) : 'Unknown'; return nr; } catch (re) { console.error(`Err row ${index}:`, re, row); return null; } }).filter(r => r !== null); console.log("Processed:", p.length); return p; }
+                function processUploadedData(rawData) {
+                    console.log("Processing", rawData.length, "rows...");
+                    if (!Array.isArray(rawData)) throw new Error("Data invalid.");
+                    const p = rawData.map((row, index) => {
+                        try {
+                            if (typeof row !== 'object' || row === null) return null;
+                            const nr = { id: `row_${index}` };
+                            Object.keys(row).forEach(key => { if (key && !key.startsWith('__EMPTY')) { nr[key.trim()] = row[key]; } });
+                            
+                            const tv = nr['Type'] ?? nr['Tag (Type)'];
+                            nr['Type'] = tv ? String(tv).trim() : "";
+                            nr['Sum of Taxable Value (2B)'] = parseCurrency(nr['Sum of Taxable Value (2B)']);
+                            nr['Sum of IGST (2B)'] = parseCurrency(nr['Sum of IGST (2B)']);
+                            nr['Sum of CGST (2B)'] = parseCurrency(nr['Sum of CGST (2B)']);
+                            nr['Sum of SGST (2B)'] = parseCurrency(nr['Sum of SGST (2B)']);
+                            nr['Total GST'] = (nr['Sum of IGST (2B)'] || 0) + (nr['Sum of CGST (2B)'] || 0) + (nr['Sum of SGST (2B)'] || 0);
+
+                            // --- Robust Date Parsing & Financial Year Calculation ---
+                            let docDateRaw = nr['Document Date (2B)'];
+                            let docDateObj = parseDateString(docDateRaw); // Use the new robust parser
+
+                            if (docDateObj) {
+                                // Format the date consistently for display
+                                nr['Document Date (2B)'] = docDateObj.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-');
+                                nr['Financial Year'] = getFinancialYear(docDateObj);
+                            } else {
+                                nr['Document Date (2B)'] = ''; // Set to blank if invalid
+                                nr['Financial Year'] = 'Unknown';
+                            }
+                            // --- End Date Logic ---
+
+                            nr['Remarks'] = nr['Remarks'] ? String(nr['Remarks']) : '';
+                            nr['Supplier Name'] = nr['Supplier Name'] ? String(nr['Supplier Name']) : 'Unknown';
+                            nr['Document Number (2B)'] = nr['Document Number (2B)'] ? String(nr['Document Number (2B)']) : '';
+                            nr['Company Name'] = nr['Company Name'] ? String(nr['Company Name']) : 'Unknown';
+                            nr['Month'] = nr['Month'] ? String(nr['Month']) : 'Unknown';
+                            return nr;
+                        } catch (re) {
+                            console.error(`Err row ${index}:`, re, row);
+                            return null;
+                        }
+                    }).filter(r => r !== null);
+                    console.log("Processed:", p.length);
+                    return p;
+                }
                 async function handleFile(event) { // Made async
                     console.log("File selected."); const file = event.target.files[0]; if (!file) return; showLoader("Reading file..."); uploadStatus.textContent="Reading..."; uploadStatus.classList.remove('text-red-600'); hideError(); if (typeof XLSX==='undefined') { showError("Excel lib failed."); return; } const reader = new FileReader(); reader.onload = async function(e) { // Made async
                         try { showLoader("Processing data..."); console.log("Processing..."); const data=new Uint8Array(e.target.result); const wb=XLSX.read(data, {type:'array', cellDates:true}); const sn='Transactions'; if (!wb.SheetNames.includes(sn)) throw new Error(`Sheet "${sn}" missing.`); const ws=wb.Sheets[sn]; const rd=XLSX.utils.sheet_to_json(ws, {raw:false, defval:null}); if (!Array.isArray(rd) || rd.length === 0) throw new Error(`No data/invalid format.`); allData=processUploadedData(rd); actionState={}; mailingListAssignments = {}; console.log("Processed:", allData.length); if (allData.length > 0) { showLoader("Saving data to browser..."); if(!db) await openDB(); await bulkSaveData(STORE_NAME, [{ id: 'all_transactions', data: allData }], true); await bulkSaveData(ACTIONS_STORE_NAME, []); await bulkSaveData(ASSIGNMENTS_STORE_NAME, []); console.log("Data bulk-saved to IndexedDB."); populateSlicers(allData); populateDatalists(allData); filterData(); renderMailingListCategories(); requestAnimationFrame(() => { switchView('dashboard'); }); console.log("Dashboard shown."); } else { throw new Error("No valid rows."); } } catch (error) { showError(`Processing Error: ${error.message}`); if (fileInput) fileInput.value=null; console.error("Proc err:", error);} }; reader.onerror = function(re) { showError("Error reading file."); if (fileInput) fileInput.value=null; console.error("Read err:", re);}; reader.readAsArrayBuffer(file);
@@ -512,169 +554,144 @@
                         showError("Please load the main transaction data first.");
                         return;
                     }
+                    showLoader("Reading Books file...");
+                    validationStatus.textContent = "Reading Books file...";
+                    validationStatus.classList.remove('text-red-600', 'text-green-600');
+                    hideError();
 
-                    const runValidationBtn = document.getElementById('runValidation');
-                    runValidationBtn.onclick = () => {
-                        showLoader("Reading Books file...");
-                        validationStatus.textContent = "Reading Books file...";
-                        validationStatus.classList.remove('text-red-600', 'text-green-600');
-                        hideError();
-
-                        if (typeof XLSX === 'undefined') {
-                            showError("Excel lib failed.");
-                            return;
-                        }
-                        const reader = new FileReader();
-                        reader.onload = async function(e) {
-                            try {
-                                showLoader("Validating transactions...");
-                                console.log("Processing Books file...");
-                                const data = new Uint8Array(e.target.result);
-                                const wb = XLSX.read(data, {
-                                    type: 'array'
-                                });
-                                const sn = wb.SheetNames[0]; // Assume first sheet
-                                if (!sn) throw new Error("No sheets found in Books file.");
-
-                                const rd = XLSX.utils.sheet_to_json(wb.Sheets[sn]);
-                                if (!Array.isArray(rd) || rd.length === 0) throw new Error(`No data found in '${sn}' sheet.`);
-
-                                const validationCriteria = document.getElementById('validationCriteria').value;
-                                const booksLookup = new Set();
-                                let voucherCol, gstinCol, partyNameCol;
-
-                                if (rd.length > 0) {
-                                    const headers = Object.keys(rd[0]);
-                                    voucherCol = headers.find(h => h.trim().toLowerCase() === 'voucher ref. no.');
-                                    gstinCol = headers.find(h => h.trim().toLowerCase() === 'gstin/uin');
-                                    partyNameCol = headers.find(h => h.trim().toLowerCase() === 'party name');
-                                }
-
-                                if (!voucherCol) {
-                                    throw new Error("Column 'Voucher Ref. No.' not found in Books file.");
-                                }
-                                if (validationCriteria === 'doc_gstin' && !gstinCol) {
-                                    throw new Error("Column 'GSTIN/UIN' not found for GSTIN based validation.");
-                                }
-                                if (validationCriteria === 'doc_supplier' && !partyNameCol) {
-                                    throw new Error("Column 'Party Name' not found for Supplier Name based validation.");
-                                }
-
-                                rd.forEach(row => {
-                                    const docNum = row[voucherCol] ? String(row[voucherCol]).trim() : '';
-                                    if (docNum) {
-                                        if (validationCriteria === 'doc_gstin') {
-                                            const gstin = row[gstinCol] ? String(row[gstinCol]).trim() : '';
-                                            if (gstin.length >= 15) {
-                                                booksLookup.add(`${docNum}|${gstin}`);
-                                            }
-                                        } else if (validationCriteria === 'doc_supplier') {
-                                            const supplierName = row[partyNameCol] ? String(row[partyNameCol]).trim() : '';
-                                            if (supplierName) {
-                                                booksLookup.add(`${docNum}|${supplierName}`);
-                                            }
-                                        }
-                                    }
-                                });
-                                console.log(`Created Books lookup with ${booksLookup.size} items based on ${validationCriteria}.`);
-
-                                let updateCount = 0;
-                                let matchedTransactions = [];
-                                let unmatchedTransactions = [];
-                                allData.forEach(row => {
-                                    const tag = row['Type'];
-                                    if (tag === 'Missing_in_PR_Current_Month' || tag === 'Missing_in_PR_Cumulative') {
-                                        const docNum = String(row['Document Number (2B)'] || '').trim();
-                                        let key;
-                                        if (validationCriteria === 'doc_gstin') {
-                                            const gstin = String(row['Supplier GSTIN (2B)'] || '').trim();
-                                            key = `${docNum}|${gstin}`;
-                                        } else {
-                                            const supplierName = String(row['Supplier Name'] || '').trim();
-                                            key = `${docNum}|${supplierName}`;
-                                        }
-
-                                        if (docNum && booksLookup.has(key)) {
-                                            if (actionState[row.id] !== "Invoice Received") {
-                                                actionState[row.id] = "Invoice Received";
-                                                updateCount++;
-                                            }
-                                            matchedTransactions.push(row);
-                                        } else {
-                                            unmatchedTransactions.push(row);
-                                        }
-                                    }
-                                });
-
-                                console.log(`Validation complete. ${updateCount} rows updated.`);
-                                displayValidationResults(matchedTransactions, unmatchedTransactions);
-
-                                if (updateCount > 0) {
-                                    showLoader("Saving updates...");
-                                    if (!db) await openDB();
-                                    const actionsArray = Object.entries(actionState).map(([id, value]) => ({
-                                        id,
-                                        value
-                                    }));
-                                    await bulkSaveData(ACTIONS_STORE_NAME, actionsArray, false);
-                                    console.log("Updated actions saved to DB.");
-                                    renderPage2Table();
-                                }
-
-                                validationStatus.textContent = `Validation complete. ${updateCount} transactions were updated to "Invoice Received".`;
-                                validationStatus.classList.add('text-green-600');
-
-                            } catch (error) {
-                                showError(`Validation Error: ${error.message}`);
-                                validationStatus.textContent = `Error: ${error.message}`;
-                                validationStatus.classList.add('text-red-600');
-                            } finally {
-                                hideLoader();
-                                if (booksFileUploader) booksFileUploader.value = null;
+                    if (typeof XLSX==='undefined') { showError("Excel lib failed."); return; }
+                    const reader = new FileReader();
+                    reader.onload = async function(e) {
+                        try {
+                            showLoader("Validating transactions...");
+                            const data = new Uint8Array(e.target.result);
+                            const wb = XLSX.read(data, { type: 'array' });
+                            const sn = wb.SheetNames[0]; // Explicitly get the first sheet name
+                            if (!sn) throw new Error("No sheets found in Books file.");
+                            
+                            const rd = XLSX.utils.sheet_to_json(wb.Sheets[sn]);
+                            if (!Array.isArray(rd) || rd.length === 0) throw new Error(`No data found in '${sn}' sheet.`);
+                            
+                            // --- Create multiple lookup sets ---
+                            const docNumLookup = new Set();
+                            const docNumGstinLookup = new Set();
+                            const docNumSupplierLookup = new Set();
+                            
+                            let voucherCol, gstinCol, supplierCol;
+                            if (rd.length > 0) {
+                                const headers = Object.keys(rd[0]).map(h => h.trim().toLowerCase());
+                                const voucherHeader = headers.find(h => h === 'voucher ref. no.');
+                                const gstinHeader = headers.find(h => h === 'gstin/uin');
+                                const supplierHeader = headers.find(h => h === 'party name' || h === 'supplier name');
+                                
+                                // Get original case headers for data access
+                                const originalHeaders = Object.keys(rd[0]);
+                                if(voucherHeader) voucherCol = originalHeaders.find(h => h.trim().toLowerCase() === voucherHeader);
+                                if(gstinHeader) gstinCol = originalHeaders.find(h => h.trim().toLowerCase() === gstinHeader);
+                                if(supplierHeader) supplierCol = originalHeaders.find(h => h.trim().toLowerCase() === supplierHeader);
                             }
-                        };
-                        reader.onerror = function(re) {
-                            showError("Error reading Books file.");
-                            if (booksFileUploader) booksFileUploader.value = null;
-                            console.error("Read err:", re);
-                        };
-                        reader.readAsArrayBuffer(file);
+
+                            if (!voucherCol) {
+                                throw new Error("Crucial column 'Voucher Ref. No.' not found in Books file.");
+                            }
+                            
+                            rd.forEach(row => {
+                                const docNum = row[voucherCol] ? String(row[voucherCol]).trim() : '';
+                                if (docNum) {
+                                    docNumLookup.add(docNum);
+                                    const gstin = gstinCol && row[gstinCol] ? String(row[gstinCol]).trim() : '';
+                                    const supplier = supplierCol && row[supplierCol] ? String(row[supplierCol]).trim() : '';
+                                    if (gstin) docNumGstinLookup.add(`${docNum}|${gstin}`);
+                                    if (supplier) docNumSupplierLookup.add(`${docNum}|${supplier}`);
+                                }
+                            });
+                            console.log(`Created lookups: DocNum (${docNumLookup.size}), DocNum+GSTIN (${docNumGstinLookup.size}), DocNum+Supplier (${docNumSupplierLookup.size}).`);
+
+                            let updateCount = 0;
+                            allData.forEach(row => {
+                                // Only try to match rows that are not already marked 'Accounted'
+                                if (actionState[row.id] === 'Accounted') return;
+
+                                const docNum = String(row['Document Number (2B)'] || '').trim();
+                                if (!docNum) return;
+
+                                const gstin = String(row['Supplier GSTIN (2B)'] || '').trim();
+                                const supplier = String(row['Supplier Name'] || '').trim();
+                                
+                                let isMatch = false;
+                                // Priority 1: Doc Number only
+                                if (docNumLookup.has(docNum)) {
+                                    isMatch = true;
+                                }
+                                // Priority 2: Doc Number & GSTIN
+                                if (!isMatch && gstin && docNumGstinLookup.has(`${docNum}|${gstin}`)) {
+                                    isMatch = true;
+                                }
+                                // Priority 3: Doc Number & Supplier Name
+                                if (!isMatch && supplier && docNumSupplierLookup.has(`${docNum}|${supplier}`)) {
+                                    isMatch = true;
+                                }
+
+                                if (isMatch) {
+                                    actionState[row.id] = "Accounted";
+                                    updateCount++;
+                                }
+                            });
+
+                            console.log(`Validation complete. ${updateCount} new rows marked as 'Accounted'.`);
+
+                            if (updateCount > 0) {
+                                showLoader("Saving updates...");
+                                if (!db) await openDB();
+                                const actionsArray = Object.entries(actionState).map(([id, value]) => ({ id, value }));
+                                await bulkSaveData(ACTIONS_STORE_NAME, actionsArray, false);
+                                console.log("Updated actions saved to DB.");
+                                renderPage2Table(); // Refresh Page 2
+                            }
+                            
+                            validationStatus.textContent = `Validation complete. ${updateCount} transactions were updated to "Accounted".`;
+                            validationStatus.classList.add('text-green-600');
+
+                        } catch (error) {
+                            showError(`Validation Error: ${error.message}`);
+                            validationStatus.textContent = `Error: ${error.message}`;
+                            validationStatus.classList.add('text-red-600');
+                        } finally {
+                            hideLoader();
+                            if(booksFileUploader) booksFileUploader.value = null;
+                        }
                     };
+                    reader.onerror = function(re) { showError("Error reading Books file."); if (booksFileUploader) booksFileUploader.value = null; console.error("Read err:", re);};
+                    reader.readAsArrayBuffer(file);
                 }
 
-                function displayValidationResults(matched, unmatched) {
-                    const container = document.getElementById('validation-results-container');
-                    const matchedTable = document.getElementById('matched-transactions');
-                    const unmatchedTable = document.getElementById('unmatched-transactions');
-                    container.classList.remove('hidden');
 
-                    matchedTable.innerHTML = createResultsTable(matched);
-                    unmatchedTable.innerHTML = createResultsTable(unmatched);
-                }
+                function populateSlicers(data) {
+                    console.log("Populating global slicers...");
+                    try {
+                        const cs = new Set(data.map(r => r['Company Name']).filter(Boolean));
+                        const fys = new Set(data.map(r => r['Financial Year']).filter(Boolean));
+                        const ms = new Set(data.map(r => r['Month']).filter(Boolean));
+                        const ts = new Set(data.map(r => r['Type']).filter(Boolean));
 
-                function createResultsTable(data) {
-                    let tableHTML = `<table class="w-full text-left table-auto"><thead><tr class="text-xs"><th class="px-2 py-1">Supplier</th><th class="px-2 py-1">Doc Num</th><th class="px-2 py-1 text-right">Total GST</th></tr></thead><tbody>`;
-                    if (data.length > 0) {
-                        data.forEach(r => {
-                            tableHTML += `<tr class="text-xs"><td class="px-2 py-1">${r['Supplier Name'] || ''}</td><td class="px-2 py-1">${r['Document Number (2B)'] || ''}</td><td class="px-2 py-1 text-right">${formatCurrency(r['Total GST'], false)}</td></tr>`;
-                        });
-                    } else {
-                        tableHTML += `<tr><td colspan="3" class="text-center p-4 text-gray-500">No transactions.</td></tr>`;
+                        populateSelect(companySlicer, cs, 'All');
+                        populateSelect(fySlicer, [...fys].sort().reverse(), 'All'); // Sort descending
+                        populateSelect(monthSlicer, ms, 'All'); // Reverted: Always show all months
+                        populateSelect(tagSlicer, ts, 'All');
+                        
+                        console.log("Global slicers populated.");
+                    } catch (e) {
+                        showError(`Filter setup error: ${e.message}`);
+                        console.error("Slicer err:", e);
                     }
-                    tableHTML += `</tbody></table>`;
-                    return tableHTML;
-                }
-
-
-                function populateSlicers(data) { console.log("Populating global slicers..."); try { const cs=new Set(data.map(r=>r['Company Name']).filter(Boolean)); const ms=new Set(data.map(r=>r['Month']).filter(Boolean)); const ts=new Set(data.map(r=>r['Type']).filter(Boolean)); const fys=new Set(data.map(r=>r['FY']).filter(Boolean)); populateSelect(companySlicer, cs, 'All'); populateSelect(monthSlicer, ms, 'All'); populateSelect(tagSlicer, ts, 'All'); populateSelect(fySlicer, fys, 'All'); console.log("Global slicers populated."); } catch(e){ showError(`Filter setup error: ${e.message}`); console.error("Slicer err:", e); } }
                 function populateSelect(selectEl, items, defaultOpt) { if(!selectEl){console.error("Select missing:", defaultOpt);return;} selectEl.innerHTML=`<option value="All">${defaultOpt}</option>`; [...items].sort().forEach(item=>{const o=document.createElement('option');o.textContent=item;o.value=item;selectEl.appendChild(o);}); }
-
+                
                 function populateDatalists(data) {
                     console.log("Populating datalists...");
                     try {
                         const supplierSet = new Set(data.map(r => r['Supplier Name']).filter(Boolean));
                         const docNumSet = new Set(data.map(r => r['Document Number (2B)']).filter(Boolean));
-
+                        
                         supplierDataList.innerHTML = [...supplierSet].map(s => `<option value="${s.replace(/"/g, '&quot;')}"></option>`).join('');
                         docNumDataList.innerHTML = [...docNumSet].map(d => `<option value="${String(d).replace(/"/g, '&quot;')}"></option>`).join('');
                         console.log("Datalists populated.");
@@ -684,8 +701,29 @@
                     }
                 }
 
-                function filterData() { console.log("Filtering..."); try { const sc=companySlicer.value; const sm=monthSlicer.value; const st=tagSlicer.value; const sfy=fySlicer.value; filteredData=allData.filter(r=>(sc==='All'||r['Company Name']===sc)&&(sm==='All'||r['Month']===sm)&&(st==='All'||r['Type']===st)&&(sfy==='All'||r['FY']===sfy)); console.log("Filtered:", filteredData.length); populateDashboard(filteredData); } catch(e){ showError(`Filter update error: ${e.message}`); console.error("Filter err:", e); } }
-
+                function filterData() {
+                    console.log("Filtering...");
+                    try {
+                        const sc = companySlicer.value;
+                        const sfy = fySlicer.value;
+                        const sm = monthSlicer.value;
+                        const st = tagSlicer.value;
+                        
+                        filteredData = allData.filter(r => 
+                            (sc === 'All' || r['Company Name'] === sc) &&
+                            (sfy === 'All' || r['Financial Year'] === sfy) &&
+                            (sm === 'All' || r['Month'] === sm) &&
+                            (st === 'All' || r['Type'] === st)
+                        );
+                        
+                        console.log("Filtered:", filteredData.length);
+                        populateDashboard(filteredData);
+                    } catch (e) {
+                        showError(`Filter update error: ${e.message}`);
+                        console.error("Filter err:", e);
+                    }
+                }
+                
                 function sumByTagIncludes(d, p, e=[]) {
                     let s=0; if(!d) return s;
                     for(const r of d){
@@ -697,7 +735,7 @@
                     return s;
                 }
                 function sumByTag(d, t) { let s=0; if(!d) return s; for(const r of d){if(r['Type']===t) s+=(r['Total GST']||0);} return s;}
-
+                
                 function populateDashboard(d) {
                     console.log("Populating dashboard...");
                     try {
@@ -723,8 +761,45 @@
                     } catch (e) { showError(`Dashboard update error: ${e.message}`); console.error("Populate err:", e); }
                 }
 
-                let page2DataFilteredAndSorted = []; function renderPage2Table() { try { if(!drilldownTableBody) throw new Error("P2 body missing"); const sfInput = document.getElementById('filter-supplier-page2'); const dfInput = document.getElementById('filter-docnum-page2'); const sf=sfInput ? sfInput.value.toLowerCase() : ''; const df=dfInput ? dfInput.value.toLowerCase() : ''; let td=filteredData.filter(r=>(r['Supplier Name']||'').toLowerCase().includes(sf)&&(String(r['Document Number (2B)']||'')).toLowerCase().includes(df)); if(jtcToggle.checked) { td = td.filter(r => r['Company Name'] === 'JTC'); } if(currentSortPage2.col) td.sort((a,b)=>sortTableData(a,b,currentSortPage2.col,currentSortPage2.dir)); page2DataFilteredAndSorted=td; const rc=td.length; const dl=MAX_ROWS_DISPLAY; document.getElementById('drilldown-row-count').innerText=`Showing ${Math.min(rc,dl)} of ${rc} rows.`; let rh=''; const ao=['None','Followed Up','Invoice Received','Followed up & Closed','No Response']; for(let i=0;i<Math.min(rc,dl);i++){const r=td[i]; const av=actionState[r.id]||'None'; const oh=ao.map(o=>`<option value="${o}" ${av===o?'selected':''}>${o==='None'?'-- Select --':o}</option>`).join(''); rh+=`<tr class="bg-white hover:bg-gray-50 text-xs"><td class="px-2 py-1 whitespace-nowrap">${r['Supplier Name']||''}</td><td class="px-2 py-1 whitespace-nowrap">${r['Document Number (2B)']||''}</td><td class="px-2 py-1 whitespace-nowrap">${r['Document Date (2B)']||''}</td><td class="px-2 py-1 whitespace-nowrap">${r['Type']||''}</td><td class="px-2 py-1 text-right">${formatCurrency(r['Sum of Taxable Value (2B)'],false)}</td><td class="px-2 py-1 text-right font-medium">${formatCurrency(r['Total GST'],false)}</td><td class="px-2 py-1 max-w-[150px] truncate" title="${r['Remarks']||''}">${r['Remarks']||''}</td><td class="px-2 py-1"><select data-id="${r.id}" class="action-select">${oh}</select></td></tr>`;} drilldownTableBody.innerHTML=rh; } catch(e){ showError(`P2 table error: ${e.message}`); console.error("Render P2 err:", e); } }
-                let page3DataFilteredAndSorted = []; function renderPage3Table() { try { const supplierAnalysisBody = document.getElementById('supplier-analysis-body'); if(!supplierAnalysisBody) throw new Error("P3 body missing"); const sfin=document.getElementById('filter-supplier-page3'); const sf=sfin?sfin.value.toLowerCase():''; const gd=groupBySupplierAndTag(filteredData); let td=gd.filter(g=>(g.supplier||'').toLowerCase().includes(sf)); if(currentSortPage3.col) td.sort((a,b)=>sortTableData(a,b,currentSortPage3.col,currentSortPage3.dir)); page3DataFilteredAndSorted=td; const rc=td.length; const dl=MAX_ROWS_DISPLAY; document.getElementById('supplier-row-count').innerText=`Showing ${Math.min(rc,dl)} of ${rc} groups.`; let rh=''; for(let i=0;i<Math.min(rc,dl);i++){const r=td[i]; const assignmentKey=r.supplier; const currentAssignment=mailingListAssignments[assignmentKey]||'None'; const selectOptions=`<option value="None">-- Select --</option>`+mailingListCategories.map(c=>`<option value="${c}" ${currentAssignment===c?'selected':''}>${c}</option>`).join(''); rh+=`<tr class="bg-white hover:bg-gray-50 text-xs"><td class="px-2 py-1 font-medium whitespace-nowrap">${r.supplier}</td><td class="px-2 py-1 whitespace-nowrap">${r.tag}</td><td class="px-2 py-1 text-right text-red-600 font-medium">${formatCurrency(r.totalGst,false)}</td><td class="px-2 py-1"><select class="add-to-select" data-supplier="${r.supplier.replace(/"/g, '&quot;')}">${selectOptions}</select></td></tr>`;} supplierAnalysisBody.innerHTML=rh; } catch(e){ showError(`P3 table error: ${e.message}`); console.error("Render P3 err:", e); } }
+                let page2DataFilteredAndSorted = [];
+                function renderPage2Table() {
+                    try {
+                        if (!drilldownTableBody) throw new Error("P2 body missing");
+                        const sfInput = document.getElementById('filter-supplier-page2');
+                        const dfInput = document.getElementById('filter-docnum-page2');
+                        const sf = sfInput ? sfInput.value.toLowerCase() : '';
+                        const df = dfInput ? dfInput.value.toLowerCase() : '';
+                        
+                        let baseData = filteredData;
+                        // --- JTC Toggle Logic ---
+                        if (isJTCView) {
+                            baseData = filteredData.filter(r => actionState[r.id] === 'Accounted');
+                        }
+                        
+                        let td = baseData.filter(r => (r['Supplier Name'] || '').toLowerCase().includes(sf) && (String(r['Document Number (2B)'] || '')).toLowerCase().includes(df));
+                        
+                        if (currentSortPage2.col) td.sort((a, b) => sortTableData(a, b, currentSortPage2.col, currentSortPage2.dir));
+                        
+                        page2DataFilteredAndSorted = td;
+                        const rc = td.length;
+                        const dl = MAX_ROWS_DISPLAY;
+                        document.getElementById('drilldown-row-count').innerText = `Showing ${Math.min(rc, dl)} of ${rc} rows.`;
+                        
+                        let rh = '';
+                        const ao = ['None', 'Accounted', 'Not Accounted', 'Invoice Not Received', 'Followed Up', 'Followed up & Closed', 'No Response'];
+                        for (let i = 0; i < Math.min(rc, dl); i++) {
+                            const r = td[i];
+                            const av = actionState[r.id] || 'None';
+                            const oh = ao.map(o => `<option value="${o}" ${av === o ? 'selected' : ''}>${o === 'None' ? '-- Select --' : o}</option>`).join('');
+                            rh += `<tr class="bg-white hover:bg-gray-50 text-xs"><td class="px-2 py-1 whitespace-nowrap">${r['Supplier Name'] || ''}</td><td class="px-2 py-1 whitespace-nowrap">${r['Document Number (2B)'] || ''}</td><td class="px-2 py-1 whitespace-nowrap">${r['Document Date (2B)'] || ''}</td><td class="px-2 py-1 whitespace-nowrap">${r['Type'] || ''}</td><td class="px-2 py-1 text-right">${formatCurrency(r['Sum of Taxable Value (2B)'], false)}</td><td class="px-2 py-1 text-right font-medium">${formatCurrency(r['Total GST'], false)}</td><td class="px-2 py-1 max-w-[150px] truncate" title="${r['Remarks'] || ''}">${r['Remarks'] || ''}</td><td class="px-2 py-1"><select data-id="${r.id}" class="action-select">${oh}</select></td></tr>`;
+                        }
+                        drilldownTableBody.innerHTML = rh;
+                    } catch (e) {
+                        showError(`P2 table error: ${e.message}`);
+                        console.error("Render P2 err:", e);
+                    }
+                }
+                let page3DataFilteredAndSorted = []; function renderPage3Table() { try { const supplierAnalysisBody = document.getElementById('supplier-analysis-body'); if(!supplierAnalysisBody) throw new Error("P3 body missing"); const sfin=document.getElementById('filter-supplier-page3'); const sf=sfin?sfin.value.toLowerCase():''; const gd=groupBySupplierAndTag(filteredData); let td=gd.filter(g=>(g.supplier||'').toLowerCase().includes(sf)); if(currentSortPage3.col) td.sort((a,b)=>sortTableData(a,b,currentSortPage3.col,currentSortPage3.dir)); page3DataFilteredAndSorted=td; const rc=td.length; const dl=MAX_ROWS_DISPLAY; document.getElementById('supplier-row-count').innerText=`Showing ${Math.min(rc,dl)} of ${rc} groups.`; let rh=''; for(let i=0;i<Math.min(rc,dl);i++){const r=td[i]; const assignmentKey = r.supplier; const currentAssignment=mailingListAssignments[assignmentKey]||'None'; const selectOptions=`<option value="None">-- Select --</option>`+mailingListCategories.map(c=>`<option value="${c}" ${currentAssignment===c?'selected':''}>${c}</option>`).join(''); rh+=`<tr class="bg-white hover:bg-gray-50 text-xs"><td class="px-2 py-1 font-medium whitespace-nowrap">${r.supplier}</td><td class="px-2 py-1 whitespace-nowrap">${r.tag}</td><td class="px-2 py-1 text-right text-red-600 font-medium">${formatCurrency(r.totalGst,false)}</td><td class="px-2 py-1"><select class="add-to-select" data-supplier="${r.supplier.replace(/"/g, '&quot;')}">${selectOptions}</select></td></tr>`;} supplierAnalysisBody.innerHTML=rh; } catch(e){ showError(`P3 table error: ${e.message}`); console.error("Render P3 err:", e); } }
                 function groupBySupplierAndTag(data) {
                     if (!data || data.length === 0) return [];
                     console.log("Grouping suppliers for Page 3...");
@@ -742,7 +817,6 @@
                         const rowMonthNum = getMonthNumber(r['Month']);
                         const docKey = `${s}|${r['Document Number (2B)']}`;
                         if (isCumulative && resolvedDocs.has(docKey)) { continue; }
-                        if (isCumulative && rowMonthNum !== latestMonthNum) { continue; }
                         const key = `${s}|${t}`;
                         if (!g[key]) g[key] = { supplier: s, tag: t, totalGst: 0 };
                         g[key].totalGst += (r['Total GST'] || 0);
@@ -751,35 +825,73 @@
                     return Object.values(g);
                 }
                 function sortTableData(a, b, col, dir) { let vA=a[col]; let vB=b[col]; const m=dir==='asc'?1:-1; if(col==='Document Date (2B)'){const dA=parseDateString(vA); const dB=parseDateString(vB); if(dA&&dB) return (dA-dB)*m; return (dA?-1:dB?1:0)*m;} if(col==='Sum of Taxable Value (2B)'||col==='Total GST'||col==='totalGst'){vA=typeof vA==='number'?vA:parseCurrency(vA); vB=typeof vB==='number'?vB:parseCurrency(vB); return(vA-vB)*m;} if(typeof vA==='string') return (vA||'').localeCompare(vB||'')*m; return 0;}
-                function parseDateString(ds) { if(!ds||typeof ds!=='string') return null; const p=ds.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/); return p?new Date(p[3],p[2]-1,p[1]):null;}
+                
+                function parseDateString(ds) {
+                    if (!ds) return null;
+
+                    // Handle Excel numeric date format (unchanged)
+                    if (typeof ds === 'number') {
+                        const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+                        const dateObj = new Date(excelEpoch.getTime() + ds * 86400000);
+                        if (!isNaN(dateObj.getTime())) return dateObj;
+                    }
+
+                    if (typeof ds !== 'string') return null;
+
+                    // Attempt to parse DD-MM-YYYY or DD/MM/YYYY
+                    const parts = ds.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+                    if (parts) {
+                        const day = parseInt(parts[1], 10);
+                        const month = parseInt(parts[2], 10);
+                        const year = parseInt(parts[3], 10);
+
+                        // Strict validation
+                        if (year >= 1900 && year <= 2100 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+                            const date = new Date(Date.UTC(year, month - 1, day));
+                            if (date && date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day) {
+                                return date;
+                            }
+                        }
+                    }
+                    
+                    // Fallback for other formats that new Date() can handle well (like ISO or '25-Oct-2023')
+                    const nativeDate = new Date(ds);
+                    if (!isNaN(nativeDate.getTime())) {
+                        const year = nativeDate.getFullYear();
+                        if (year > 1900 && year < 2100) {
+                            return nativeDate;
+                        }
+                    }
+
+                    return null; // Return null if no valid format is found
+                }
+                
+                function getFinancialYear(date) {
+                    if (!date || !(date instanceof Date)) return 'Unknown';
+                    const year = date.getFullYear();
+                    const month = date.getMonth(); // 0-indexed (Jan=0, Mar=2, Apr=3)
+                    
+                    // FY starts in April (month index 3)
+                    if (month >= 3) {
+                        return `${year}-${String(year + 1).slice(-2)}`;
+                    } else {
+                        return `${year - 1}-${String(year).slice(-2)}`;
+                    }
+                }
                 function handleSortClick(ev) { try { const th=ev.target.closest('th.sortable'); if(!th) return; const tc=th.closest('.visual-container, .page-content'); if(!tc) return; const ip2=tc.querySelector('#drilldown-table-body')!==null; const cs=ip2?currentSortPage2:currentSortPage3; const cl=th.dataset.col; let nd=(cs.col===cl&&cs.dir==='asc')?'desc':'asc'; if(cs.col===cl&&cs.dir==='desc') nd=null; cs.col=nd?cl:null; cs.dir=nd; th.closest('thead').querySelectorAll('th.sortable').forEach(h=>{h.classList.remove('sort-asc','sort-desc'); if(h===th&&nd) h.classList.add(nd==='asc'?'sort-asc':'sort-desc');}); if(ip2) renderPage2Table(); else renderPage3Table(); } catch(e){ showError("Sort error."); console.error("Sort click err:", e); } }
                 function exportToCsv(data, fName, cols) { console.log("Export CSV:", fName); if(typeof XLSX==='undefined'){showError("Core Excel lib missing.");return;} if(!Array.isArray(data)||data.length===0){showError("No data.");return;} showLoader("Exporting CSV..."); setTimeout(()=>{try{const ed=data.map(r=>{const nr={}; cols.forEach(c=>{let v=r[c.key]; if(typeof v==='string'){v=v.replace(/"/g,'""'); if(v.includes(',')||v.includes('\n')||v.includes('"')){v=`"${v}"`;}} else if(v===null||v===undefined){v='';} else {v=String(v); if(v.includes(',')){v=`"${v}"`;}} nr[c.header]=v;}); return nr;}); const ws=XLSX.utils.json_to_sheet(ed,{header:cols.map(c=>c.header)}); const csv=XLSX.utils.sheet_to_csv(ws); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const link=document.createElement("a"); if(link.download!==undefined){const url=URL.createObjectURL(blob); link.setAttribute("href",url); link.setAttribute("download",`${fName}_${new Date().toISOString().slice(0,10)}.csv`); link.style.visibility='hidden'; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);} else {showError("CSV download not supported.");} console.log("CSV Export OK.");} catch(e){showError(`CSV Export failed: ${e.message}`); console.error("CSV Export err:", e);} finally{hideLoader();}}, 50); }
                 function renderMailingListCategories() { const div = document.getElementById('mailingListCategories'); if(div) div.innerHTML = mailingListCategories.map(cat => `<button onclick="showMailingListPreview('${cat}')" class="bg-blue-100 text-blue-700 px-3 py-1 rounded text-sm hover:bg-blue-200">${cat}</button>`).join(''); }
-                async function handleAddToMailingList(supplier, tag, selectElement) { // Made async
+                
+                async function handleAddToMailingList(supplier, selectElement) {
                     const category = selectElement.value;
-                    const key = supplier; // Use supplier name as the key
-                    if (category === 'None') {
-                        // Remove from the current category if it exists
-                        delete mailingListAssignments[key];
-                    } else {
-                        // If assigning to a new category, ensure it's not in any other category
-                        for (const k in mailingListAssignments) {
-                            if (mailingListAssignments[k] === category && k === key) {
-                                delete mailingListAssignments[k];
-                            }
-                        }
-                        mailingListAssignments[key] = category;
-                    }
-                    console.log(`Assignment for ${key}: ${category}`);
-                    try {
-                        await saveSingleAssignment(key, category);
-                        console.log("Assignment saved.");
-                    } catch (e) {
-                        console.error("Failed to save assignment:", e);
-                        showError("Failed to save mailing list assignment.");
-                    }
-                    renderPage3Table();
+                    const key = supplier; // Key is now just the supplier name
+                    if (category === 'None') { delete mailingListAssignments[key]; }
+                    else { mailingListAssignments[key] = category; }
+                    console.log(`Assignment for supplier ${key}: ${category}`);
+                    try { await saveSingleAssignment(key, category); console.log("Assignment saved."); }
+                    catch (e) { console.error("Failed to save assignment:", e); showError("Failed to save mailing list assignment."); }
                 }
+
                 window.showMailingListPreview = function(category) {
                      console.log("Showing preview for:", category);
                      currentMailingListCategory = category;
@@ -787,41 +899,108 @@
                      const title = document.getElementById('mailingListModalTitle');
                      const previewArea = document.getElementById('mailingListPreviewArea');
                      if (!modal || !title || !previewArea) return;
+                     
                      title.textContent = `Mailing List: ${category}`;
-                     const suppliersInCategory = Object.keys(mailingListAssignments).filter(key => mailingListAssignments[key] === category);
-                     let previewData = allData.filter(row => suppliersInCategory.includes(row['Supplier Name']));
+                     
+                     const assignedSuppliers = Object.entries(mailingListAssignments)
+                         .filter(([supplier, cat]) => cat === category)
+                         .map(([supplier, cat]) => supplier);
+                    
+                     let previewData = filteredData.filter(row => 
+                         assignedSuppliers.includes(row['Supplier Name']) &&
+                         actionState[row.id] !== 'Accounted' // Exclude 'Accounted' transactions
+                     );
+
+                     // --- Logic from original bug fix (Cumulative vs Current Month) ---
                      let latestMonthNum = 0;
-                     for (const r of allData) { latestMonthNum = Math.max(latestMonthNum, getMonthNumber(r['Month'])); }
+                     for (const r of filteredData) { latestMonthNum = Math.max(latestMonthNum, getMonthNumber(r['Month'])); }
                      const resolvedDocs = new Set();
                      for (const r of previewData) { if (r['Type'] && (r['Type'].includes('NowUploaded') || r['Type'].includes('NowClaimed'))) { resolvedDocs.add(`${r['Supplier Name']}|${r['Document Number (2B)']}`); } }
+                     
                      previewData = previewData.filter(row => {
                          if (row['Type'] === 'Missing_in_PR_Current_Month' && getMonthNumber(row['Month']) !== latestMonthNum) return false;
                          const docKey = `${row['Supplier Name']}|${row['Document Number (2B)']}`;
                          if (row['Type'].includes('_Cumulative') && resolvedDocs.has(docKey)) return false;
                          return true;
                      });
+                     // --- End original bug fix logic ---
+
                      console.log("Filtered Preview Data:", previewData);
-                     let tableHTML = `<table class="w-full text-left table-auto border-collapse"><thead><tr class="bg-gray-100 text-xs uppercase"><th class="border p-1">Supplier</th><th class="border p-1">Doc Num</th><th class="border p-1">Doc Date</th><th class="border p-1">Tag</th><th class="border p-1 text-right">Taxable</th><th class="border p-1 text-right">Total GST</th><th class="border p-1">Remarks</th><th class="border p-1">Action</th></tr></thead><tbody>`; if (previewData.length > 0) { previewData.forEach(r => { tableHTML += `<tr class="text-xs"><td class="border p-1">${r['Supplier Name'] || ''}</td><td class="border p-1">${r['Document Number (2B)'] || ''}</td><td class="border p-1">${r['Document Date (2B)'] || ''}</td><td class="border p-1">${r['Type'] || ''}</td><td class="border p-1 text-right">${formatCurrency(r['Sum of Taxable Value (2B)'], false)}</td><td class="border p-1 text-right">${formatCurrency(r['Total GST'], false)}</td><td class="border p-1">${r['Remarks'] || ''}</td><td class="border p-1">${actionState[r.id] || 'None'}</td></tr>`; }); } else { tableHTML += `<tr><td colspan="8" class="text-center p-4 text-gray-500">No items found matching the rules.</td></tr>`; } tableHTML += `</tbody></table>`; previewArea.innerHTML = tableHTML; modal.style.display = 'flex';
+                     let tableHTML = `<table class="w-full text-left table-auto border-collapse"><thead><tr class="bg-gray-100 text-xs uppercase"><th class="border p-1">Company</th><th class="border p-1">Supplier</th><th class="border p-1">Doc Num</th><th class="border p-1">Doc Date</th><th class="border p-1">Tag</th><th class="border p-1 text-right">Taxable</th><th class="border p-1 text-right">Total GST</th><th class="border p-1">Remarks</th><th class="border p-1">Action</th></tr></thead><tbody>`;
+                     if (previewData.length > 0) {
+                         previewData.forEach(r => {
+                             tableHTML += `<tr class="text-xs">
+                                 <td class="border p-1">${r['Company Name'] || ''}</td>
+                                 <td class="border p-1">${r['Supplier Name'] || ''}</td>
+                                 <td class="border p-1">${r['Document Number (2B)'] || ''}</td>
+                                 <td class="border p-1">${r['Document Date (2B)'] || ''}</td>
+                                 <td class="border p-1">${r['Type'] || ''}</td>
+                                 <td class="border p-1 text-right">${formatCurrency(r['Sum of Taxable Value (2B)'], false)}</td>
+                                 <td class="border p-1 text-right">${formatCurrency(r['Total GST'], false)}</td>
+                                 <td class="border p-1">${r['Remarks'] || ''}</td>
+                                 <td class="border p-1">${actionState[r.id] || 'None'}</td>
+                             </tr>`;
+                         });
+                     } else {
+                         tableHTML += `<tr><td colspan="9" class="text-center p-4 text-gray-500">No items found matching the rules.</td></tr>`;
+                     }
+                     tableHTML += `</tbody></table>`;
+                     previewArea.innerHTML = tableHTML;
+                     modal.style.display = 'flex';
                  }
-                window.exportMailingList = function() {
-                     if (!currentMailingListCategory) return;
-                     console.log("Exporting mailing list for:", currentMailingListCategory);
-                     const suppliersInCategory = Object.keys(mailingListAssignments).filter(key => mailingListAssignments[key] === currentMailingListCategory);
-                     let previewData = allData.filter(row => suppliersInCategory.includes(row['Supplier Name']));
-                     let latestMonthNum = 0;
-                     for (const r of allData) { latestMonthNum = Math.max(latestMonthNum, getMonthNumber(r['Month'])); }
-                     const resolvedDocs = new Set();
-                     for (const r of previewData) { if (r['Type'] && (r['Type'].includes('NowUploaded') || r['Type'].includes('NowClaimed'))) { resolvedDocs.add(`${r['Supplier Name']}|${r['Document Number (2B)']}`); } }
-                     previewData = previewData.filter(row => {
-                         if (row['Type'] === 'Missing_in_PR_Current_Month' && getMonthNumber(row['Month']) !== latestMonthNum) return false;
-                         const docKey = `${row['Supplier Name']}|${row['Document Number (2B)']}`;
-                         if (row['Type'].includes('_Cumulative') && resolvedDocs.has(docKey)) return false;
-                         return true;
-                     });
-                     if (previewData.length === 0) { showError("No data to export."); return; }
-                     const cols = [ { header: 'Supplier Name', key: 'Supplier Name' }, { header: 'Doc Number', key: 'Document Number (2B)' }, { header: 'Doc Date', key: 'Document Date (2B)' }, { header: 'Tag (Type)', key: 'Type' }, { header: 'Taxable Value', key: 'Sum of Taxable Value (2B)' }, { header: 'Total GST', key: 'Total GST' }, { header: 'Remarks', key: 'Remarks' }, { header: 'Action', key: 'Action' } ];
-                     const data = previewData.map(row => ({ ...row, 'Action': actionState[row.id] || 'None' }));
-                     exportToCsv(data, `Mailing_List_${currentMailingListCategory}`, cols);
+
+                window.sendMail = function() {
+                    if (!currentMailingListCategory) return;
+
+                    // 1. Prepare data (same logic as old export)
+                    const assignedSuppliers = Object.entries(mailingListAssignments)
+                        .filter(([supplier, cat]) => cat === currentMailingListCategory)
+                        .map(([supplier, cat]) => supplier);
+
+                    let previewData = filteredData.filter(row => 
+                        assignedSuppliers.includes(row['Supplier Name']) &&
+                        actionState[row.id] !== 'Accounted'
+                    );
+
+                    let latestMonthNum = 0;
+                    for (const r of filteredData) { latestMonthNum = Math.max(latestMonthNum, getMonthNumber(r['Month'])); }
+                    const resolvedDocs = new Set();
+                    for (const r of previewData) { if (r['Type'] && (r['Type'].includes('NowUploaded') || r['Type'].includes('NowClaimed'))) { resolvedDocs.add(`${r['Supplier Name']}|${r['Document Number (2B)']}|${r['Company Name']}|${r['Type']}`); } }
+                    
+                    previewData = previewData.filter(row => {
+                        if (row['Type'] === 'Missing_in_PR_Current_Month' && getMonthNumber(row['Month']) !== latestMonthNum) return false;
+                        const docKey = `${row['Supplier Name']}|${row['Document Number (2B)']}|${row['Company Name']}|${row['Type']}`;
+                        if (row['Type'].includes('_Cumulative') && resolvedDocs.has(docKey)) return false;
+                        return true;
+                    });
+
+                    if (previewData.length === 0) {
+                        showError("No data to export for the mail.");
+                        return;
+                    }
+
+                    // 2. Download CSV with custom name
+                    const today = new Date().toISOString().slice(0, 10);
+                    const fileName = `${currentMailingListCategory}_Invoice_required_${today}.csv`;
+                    const cols = [
+                         { header: 'Company Name', key: 'Company Name' },
+                         { header: 'Supplier Name', key: 'Supplier Name' },
+                         { header: 'Doc Number', key: 'Document Number (2B)' },
+                         { header: 'Doc Date', key: 'Document Date (2B)' },
+                         { header: 'Tag (Type)', key: 'Type' },
+                         { header: 'Taxable Value', key: 'Sum of Taxable Value (2B)' },
+                         { header: 'Total GST', key: 'Total GST' },
+                         { header: 'Remarks', key: 'Remarks' },
+                         { header: 'Action', key: 'Action' }
+                     ];
+                    const data = previewData.map(row => ({ ...row, 'Action': actionState[row.id] || 'None' }));
+                    exportToCsv(data, fileName, cols);
+
+                    // 3. Draft mail in Outlook
+                    const subject = `Invoice Required for ${currentMailingListCategory} - ${today}`;
+                    const body = `Dear Team,\n\nPlease find the attached report of required invoices.\n\nBest regards,\n`;
+                    const mailtoLink = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                    window.location.href = mailtoLink;
                 }
                 window.toggleChatbot = function() { const cb = document.getElementById('chatbotSidebar'); if (cb) cb.classList.toggle('open'); }
                 window.handleChatInput = async function() { const ci = document.getElementById('chatInput'); const message = ci.value.trim(); if (!message) return; console.log("User:", message); addChatMessage(message, 'user'); ci.value = ''; addChatMessage("Thinking...", 'bot thinking-message'); await new Promise(resolve => setTimeout(resolve, 500)); try { const interpretation = simulateGeminiInterpretation(message); console.log("Simulated Interpretation:", interpretation); let botReply = ""; let applyFilter = false; if (interpretation.action === 'filter') { let changesMade = false; if (interpretation.company) { if(setSlicerValue(document.getElementById('companySlicer'), interpretation.company)) changesMade = true; } if (interpretation.month) { if(setSlicerValue(document.getElementById('monthSlicer'), interpretation.month)) changesMade = true; } if (interpretation.tag) { if(setSlicerValue(document.getElementById('tagSlicer'), interpretation.tag)) changesMade = true; } if (changesMade) { filterData(); applyFilter=true; botReply = `OK, filtered for ${interpretation.matchedText || 'your request'}. Check the Transactions tab.`; showPage('page2','tab2'); } else { botReply = "Couldn't apply filter. Check values."; } } else if (interpretation.action === 'details') { const detailData = allData.filter(r => (r['Supplier Name'] || '').toLowerCase().includes(interpretation.supplier.toLowerCase())); if (detailData.length > 0) { showDetailsPreview(detailData, `Details for ${interpretation.supplier}`); botReply = `OK, showing details for suppliers matching "${interpretation.supplier}".`; } else { botReply = `Sorry, no data for suppliers matching "${interpretation.supplier}".`; } } else { botReply = "Sorry, I can only filter by Company, Month, or Tag, or show supplier details. Try 'show ABC pvt ltd' or 'filter for Sep'."; } addChatMessage(botReply, 'bot'); } catch (e) { console.error("Chatbot error:", e); addChatMessage("Sorry, an error occurred.", 'bot'); } }
@@ -833,7 +1012,7 @@
                 // --- Event Listeners Initialization ---
                 console.log("Attaching event listeners...");
                  if (!fileInput) throw new Error("File input missing!"); fileInput.addEventListener('change', handleFile);
-
+                 
                  // --- New Startup Screen Listeners ---
                  if (btnLoadSaved) {
                      btnLoadSaved.addEventListener('click', async () => {
@@ -845,7 +1024,7 @@
                              if (!db) db = await openDB();
                              // ** Workaround 1: Load single bulk object **
                              const savedDataArray = await loadDataFromDB(STORE_NAME);
-
+                             
                              if (savedDataArray && savedDataArray.length > 0 && savedDataArray[0].data) {
                                  allData = savedDataArray[0].data; // Extract data
                                  const savedAssignmentsArray = await loadDataFromDB(ASSIGNMENTS_STORE_NAME);
@@ -853,12 +1032,12 @@
 
                                  mailingListAssignments = {};
                                  if (Array.isArray(savedAssignmentsArray)) savedAssignmentsArray.forEach(item => { mailingListAssignments[item.key] = item.value; });
-
+                                 
                                  actionState = {};
                                  if (Array.isArray(savedActionsArray)) savedActionsArray.forEach(item => { actionState[item.id] = item.value; });
 
                                  console.log("Loaded", allData.length, "rows from DB.");
-
+                                 
                                  populateSlicers(allData);
                                  populateDatalists(allData);
                                  filterData();
@@ -880,7 +1059,7 @@
                          }
                      });
                  } else console.warn("Load Saved button missing.");
-
+                 
                  if (btnClearSaved) {
                      btnClearSaved.addEventListener('click', async () => {
                          console.log("Clear Saved Data clicked.");
@@ -901,20 +1080,19 @@
                          }
                      });
                  } else console.warn("Clear Saved button missing.");
-
+                 
                  // --- Other Event Listeners ---
                  if (companySlicer) companySlicer.addEventListener('change', filterData); else console.warn("Company slicer missing.");
+                 if (fySlicer) fySlicer.addEventListener('change', filterData); else console.warn("FY slicer missing.");
                  if (monthSlicer) monthSlicer.addEventListener('change', filterData); else console.warn("Month slicer missing.");
                  if (tagSlicer) tagSlicer.addEventListener('change', filterData); else console.warn("Tag slicer missing.");
-                 if (fySlicer) fySlicer.addEventListener('change', filterData); else console.warn("FY slicer missing.");
-                 if(jtcToggle) jtcToggle.addEventListener('change', renderPage2Table); else console.warn("JTC toggle missing.");
                  if (filterSupplierPage2) filterSupplierPage2.addEventListener('input', renderPage2Table); else console.warn("Filter Supplier P2 missing.");
                  if (filterDocNumPage2) filterDocNumPage2.addEventListener('input', renderPage2Table); else console.warn("Filter DocNum P2 missing.");
                  if (filterSupplierPage3) filterSupplierPage3.addEventListener('input', renderPage3Table); else console.warn("Filter Supplier P3 missing.");
-
-                 const mainContent = document.querySelector('main');
+                 
+                 const mainContent = document.querySelector('main'); 
                  if (!mainContent) throw new Error("Main content missing!");
-
+                 
                  mainContent.addEventListener('change', async (e) => {
                      if (e.target.classList.contains('action-select')) {
                          const id = e.target.dataset.id; const value = e.target.value;
@@ -922,14 +1100,14 @@
                          if (db) await saveSingleAction(id, value); // Save only this action
                      }
                      else if (e.target.classList.contains('add-to-select')) {
-                         await handleAddToMailingList(e.target.dataset.supplier, e.target.dataset.tag, e.target);
+                         await handleAddToMailingList(e.target.dataset.supplier, e.target);
                      }
                   });
-
+                  
                  mainContent.addEventListener('click', handleSortClick); // Sorting
                  if (exportBtnPage2) exportBtnPage2.addEventListener('click', () => { const cols = [ { header: 'Supplier Name', key: 'Supplier Name' }, { header: 'Doc Number', key: 'Document Number (2B)' }, { header: 'Doc Date', key: 'Document Date (2B)' }, { header: 'Tag (Type)', key: 'Type' }, { header: 'Taxable Value', key: 'Sum of Taxable Value (2B)' }, { header: 'Total GST', key: 'Total GST' }, { header: 'Remarks', key: 'Remarks' }, { header: 'Action', key: 'Action' } ]; const data = page2DataFilteredAndSorted.map(row => ({ ...row, 'Action': actionState[row.id] || 'None' })); exportToCsv(data, 'Transaction_Report', cols); }); else console.warn("Export P2 missing.");
                  if (exportBtnPage3) exportBtnPage3.addEventListener('click', () => { const cols = [ { header: 'Supplier Name', key: 'supplier' }, { header: 'Tag (Type)', key: 'tag' }, { header: 'Total GST', key: 'totalGst' } ]; exportToCsv(page3DataFilteredAndSorted, 'Supplier_Analysis', cols); }); else console.warn("Export P3 missing.");
-
+                 
                  // --- New Clear Button Listeners ---
                  if(clearActionsBtn) clearActionsBtn.addEventListener('click', async () => {
                      if (confirm("Clear all 'Action' selections?")) {
@@ -958,7 +1136,7 @@
                          hideLoader();
                      }
                  });
-
+                 
                  if (clearDataBtnHeader) clearDataBtnHeader.addEventListener('click', async () => {
                      console.log("Clear data header button clicked.");
                      if (confirm("Are you sure you want to clear all saved data? You will need to re-upload.")) {
@@ -973,6 +1151,30 @@
                      }
                  });
 
+                 // --- JTC Toggle Listeners ---
+                 const toggleMV = document.getElementById('toggleMV');
+                 const toggleJTC = document.getElementById('toggleJTC');
+
+                 if (toggleMV && toggleJTC) {
+                    toggleMV.addEventListener('click', () => {
+                        isJTCView = false;
+                        toggleMV.classList.add('bg-blue-600', 'text-white');
+                        toggleMV.classList.remove('bg-white', 'text-gray-900');
+                        toggleJTC.classList.add('bg-white', 'text-gray-900');
+                        toggleJTC.classList.remove('bg-blue-600', 'text-white');
+                        renderPage2Table();
+                    });
+                    toggleJTC.addEventListener('click', () => {
+                        isJTCView = true;
+                        toggleJTC.classList.add('bg-blue-600', 'text-white');
+                        toggleJTC.classList.remove('bg-white', 'text-gray-900');
+                        toggleMV.classList.add('bg-white', 'text-gray-900');
+                        toggleMV.classList.remove('bg-blue-600', 'text-white');
+                        renderPage2Table();
+                    });
+                 }
+
+
                  // --- New Listener for Page 5 Uploader ---
                  if (booksFileUploader) {
                      booksFileUploader.addEventListener('change', handleBooksFile);
@@ -983,7 +1185,7 @@
                 // Initial setup for Mailing List categories
                 renderMailingListCategories();
                 console.log("Event listeners attached.");
-
+                
                 // --- Initial Load Logic ---
                 console.log("Setting initial UI state...");
                 switchView('uploader'); // Start on the uploader/startup screen
