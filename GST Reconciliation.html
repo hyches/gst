@@ -180,6 +180,114 @@
           document.body.removeChild(a);
       }
 
+      // --- From services/cryptoService.ts ---
+      const cryptoService = (function() {
+          let sessionKey = null;
+          const KEY_STORAGE_ID = 'gstDashboardCryptoKey';
+
+          const getKey = async function() {
+              if (sessionKey) return sessionKey;
+
+              const storedKey = sessionStorage.getItem(KEY_STORAGE_ID);
+              if (storedKey) {
+                  try {
+                      const jwk = JSON.parse(storedKey);
+                      sessionKey = await window.crypto.subtle.importKey(
+                          "jwk",
+                          jwk,
+                          { name: "AES-GCM" },
+                          true, // allow exporting
+                          ["encrypt", "decrypt"]
+                      );
+                      return sessionKey;
+                  } catch (e) {
+                      console.error("Failed to import stored key, will generate a new one.", e);
+                      sessionStorage.removeItem(KEY_STORAGE_ID);
+                  }
+              }
+
+              const newKey = await window.crypto.subtle.generateKey(
+                  { name: "AES-GCM", length: 256 },
+                  true, // make it exportable
+                  ["encrypt", "decrypt"]
+              );
+
+              const jwk = await window.crypto.subtle.exportKey("jwk", newKey);
+              sessionStorage.setItem(KEY_STORAGE_ID, JSON.stringify(jwk));
+              sessionKey = newKey;
+              return sessionKey;
+          };
+          
+          const arrayBufferToBase64 = function(buffer) {
+              let binary = '';
+              const bytes = new Uint8Array(buffer);
+              const len = bytes.byteLength;
+              for (let i = 0; i < len; i++) {
+                  binary += String.fromCharCode(bytes[i]);
+              }
+              return window.btoa(binary);
+          };
+
+          const base64ToArrayBuffer = function(base64) {
+              const binary_string = window.atob(base64);
+              const len = binary_string.length;
+              const bytes = new Uint8Array(len);
+              for (let i = 0; i < len; i++) {
+                  bytes[i] = binary_string.charCodeAt(i);
+              }
+              return bytes.buffer;
+          };
+
+          return {
+              encrypt: async function(data) {
+                  if (data === null || data === undefined) return null;
+                  try {
+                      const key = await getKey();
+                      const iv = window.crypto.getRandomValues(new Uint8Array(12));
+                      const jsonString = JSON.stringify(data);
+                      const encodedData = new TextEncoder().encode(jsonString);
+
+                      const encryptedContent = await window.crypto.subtle.encrypt(
+                          { name: "AES-GCM", iv: iv },
+                          key,
+                          encodedData
+                      );
+                      
+                      const combinedBuffer = new Uint8Array(iv.length + encryptedContent.byteLength);
+                      combinedBuffer.set(iv, 0);
+                      combinedBuffer.set(new Uint8Array(encryptedContent), iv.length);
+
+                      return arrayBufferToBase64(combinedBuffer.buffer);
+                  } catch (error) {
+                      console.error("Encryption failed:", error);
+                      throw new Error("Could not encrypt data.");
+                  }
+              },
+              decrypt: async function(encryptedBase64) {
+                  if (encryptedBase64 === null || encryptedBase64 === undefined) return null;
+                  try {
+                      const key = await getKey();
+                      const combinedBuffer = base64ToArrayBuffer(encryptedBase64);
+                      
+                      const iv = combinedBuffer.slice(0, 12);
+                      const encryptedContent = combinedBuffer.slice(12);
+                      
+                      const decryptedContent = await window.crypto.subtle.decrypt(
+                          { name: "AES-GCM", iv: iv },
+                          key,
+                          encryptedContent
+                      );
+
+                      const decodedData = new TextDecoder().decode(decryptedContent);
+                      return JSON.parse(decodedData);
+                  } catch (error) {
+                      console.error("Decryption failed:", error);
+                      throw new Error("Could not decrypt data. Session key might be invalid or data is corrupt.");
+                  }
+              }
+          };
+      })();
+
       // --- From services/dbService.ts ---
       const dbService = (function() {
           let db;
@@ -223,14 +331,21 @@
                 const txStore = tx.objectStore(STORE_TRANSACTIONS);
                 const actStore = tx.objectStore(STORE_ACTIONS);
                 const assStore = tx.objectStore(STORE_ASSIGNMENTS);
+
+                const [encryptedTxs, encryptedActs, encryptedAss] = await Promise.all([
+                    cryptoService.encrypt(transactions),
+                    cryptoService.encrypt(actions),
+                    cryptoService.encrypt(assignments)
+                ]);
+
                 txStore.clear();
                 actStore.clear();
                 assStore.clear();
-                if(transactions.length > 0) {
-                  txStore.put({ id: 'all_data', data: transactions });
-                }
-                Object.entries(actions).forEach(function([id, value]) { actStore.put({id, value}) });
-                Object.entries(assignments).forEach(function([key, value]) { assStore.put({key, value}) });
+                
+                if (encryptedTxs) txStore.put({ id: 'encrypted_data', data: encryptedTxs });
+                if (encryptedActs) actStore.put({ id: 'encrypted_actions', data: encryptedActs });
+                if (encryptedAss) assStore.put({ key: 'encrypted_assignments', data: encryptedAss });
+
                 return new Promise(function(resolve, reject) {
                   tx.oncomplete = function() { resolve() };
                   tx.onerror = function() { reject(tx.error) };
@@ -242,29 +357,60 @@
                 const txStore = tx.objectStore(STORE_TRANSACTIONS);
                 const actStore = tx.objectStore(STORE_ACTIONS);
                 const assStore = tx.objectStore(STORE_ASSIGNMENTS);
-                const txRequest = txStore.get('all_data');
-                const actRequest = actStore.getAll();
-                const assRequest = assStore.getAll();
+
+                const txRequest = txStore.get('encrypted_data');
+                const actRequest = actStore.get('encrypted_actions');
+                const assRequest = assStore.get('encrypted_assignments');
+
                 return new Promise(function(resolve, reject) {
-                  let result = { transactions: [], actions: {}, assignments: {} };
-                  tx.oncomplete = function() {
-                      result.transactions = txRequest.result?.data ?? [];
-                      actRequest.result.forEach(function(item) { result.actions[item.id] = item.value; });
-                      assRequest.result.forEach(function(item) { result.assignments[item.key] = item.value; });
-                      resolve(result);
+                  tx.oncomplete = async function() {
+                      try {
+                          const encryptedTxs = txRequest.result?.data;
+                          const encryptedActs = actRequest.result?.data;
+                          const encryptedAss = assRequest.result?.data;
+                          
+                          const [transactions, actions, assignments] = await Promise.all([
+                              encryptedTxs ? cryptoService.decrypt(encryptedTxs) : Promise.resolve([]),
+                              encryptedActs ? cryptoService.decrypt(encryptedActs) : Promise.resolve({}),
+                              encryptedAss ? cryptoService.decrypt(encryptedAss) : Promise.resolve({})
+                          ]);
+
+                          resolve({ transactions, actions, assignments });
+                      } catch(e) {
+                          console.error("Failed to load and decrypt data. A new session may require a file upload.", e);
+                          resolve({ transactions: [], actions: {}, assignments: {} });
+                      }
                   };
                   tx.onerror = function() { reject(tx.error) };
                 });
               },
               saveValidationBook: async function(book) {
                   await openDB();
-                  getStore(STORE_VALIDATION_BOOKS, 'readwrite').put(book);
+                  const encryptedData = await cryptoService.encrypt(book.data);
+                  getStore(STORE_VALIDATION_BOOKS, 'readwrite').put({ companyName: book.companyName, data: encryptedData });
               },
               loadAllValidationBooks: async function() {
                   await openDB();
                   const request = getStore(STORE_VALIDATION_BOOKS, 'readonly').getAll();
                   return new Promise(function(resolve, reject) {
-                      request.onsuccess = function() { resolve(request.result) };
+                      request.onsuccess = async function() {
+                          try {
+                              const encryptedRecords = request.result;
+                              if (!encryptedRecords || encryptedRecords.length === 0) {
+                                  return resolve([]);
+                              }
+                              const decryptedBooks = await Promise.all(
+                                  encryptedRecords.map(async function(record) {
+                                      const decryptedData = await cryptoService.decrypt(record.data);
+                                      return { companyName: record.companyName, data: decryptedData };
+                                  })
+                              );
+                              resolve(decryptedBooks);
+                          } catch (e) {
+                              console.error("Failed to decrypt validation books", e);
+                              resolve([]);
+                          }
+                      };
                       request.onerror = function() { reject(request.error) };
                   });
               },
@@ -1219,6 +1365,18 @@
               });
           }, [allData, filters]);
           
+          const handleSupplierChartClick = function(supplierName) {
+            const supplierData = filteredData.filter(function(row) {
+                const isMissing = (row.Type.includes('Missing_2B') || row.Type.includes('Missing_in_PR')) && !row.Type.includes('NowUploaded') && !row.Type.includes('NowClaimed');
+                return row['Supplier Name'] === supplierName && isMissing;
+            });
+            if (supplierData.length > 0) {
+                setPrintModalData({ isOpen: true, category: `Missing GST Details for ${supplierName}`, data: supplierData });
+            } else {
+                alert(`No missing GST transactions found for ${supplierName} within the current filter selection.`);
+            }
+          };
+
           const kpiData = useMemo(function() {
               const missing2bCum = filteredData.reduce(function(sum, r) {
                   return (r.Type === 'Missing_2B_Cumulative' || r.Type === 'Missing_2B_Current_Month') ? sum + r['Total GST'] : sum;
@@ -1290,18 +1448,35 @@
                filteredData.forEach(function(r) {
                   if ((r.Type.includes('Missing_2B') || r.Type.includes('Missing_in_PR')) && !r.Type.includes('NowUploaded') && !r.Type.includes('NowClaimed')) {
                       const supplier = r['Supplier Name'];
-                      if (!bySupplier[supplier]) bySupplier[supplier] = 0;
-                      bySupplier[supplier] += r['Total GST'];
+                      if (!bySupplier[supplier]) {
+                          bySupplier[supplier] = { gst: 0, supplier: supplier };
+                      }
+                      bySupplier[supplier].gst += r['Total GST'];
                   }
               });
-              const topSuppliers = Object.entries(bySupplier).sort(function(a, b) { return b[1] - a[1]; }).slice(0, 10);
+              const topSuppliers = Object.values(bySupplier).sort(function(a, b) { return b.gst - a.gst; }).slice(0, 10);
               const topSuppliersChartConfig = {
                   type: 'bar',
                   data: {
-                      labels: topSuppliers.map(function(s) { return s[0]; }),
-                      datasets: [{ label: 'Missing GST', data: topSuppliers.map(function(s) { return s[1]; }), backgroundColor: '#4F46E5' }]
+                      labels: topSuppliers.map(function(s) { return s.supplier; }),
+                      datasets: [{ label: 'Missing GST', data: topSuppliers.map(function(s) { return s.gst; }), backgroundColor: '#4F46E5' }]
                   },
-                  options: { indexAxis: 'y', responsive: true, plugins: { title: { display: true, text: 'Top 10 Suppliers by Missing GST' } }, scales: { x: { ticks: { callback: function(value) { return formatCurrency(value, true); } } } } }
+                  options: {
+                      indexAxis: 'y',
+                      responsive: true,
+                      plugins: {
+                          title: { display: true, text: 'Top 10 Suppliers by Missing GST' }
+                      },
+                      scales: {
+                          x: { ticks: { callback: function(value) { return formatCurrency(value, true); } } }
+                      },
+                      onClick: function(evt, elements) {
+                          if (!elements.length) return;
+                          const index = elements[0].index;
+                          const supplier = topSuppliers[index].supplier;
+                          handleSupplierChartClick(supplier);
+                      }
+                  }
               };
 
               return { monthly: monthlyChartConfig, byCategory: categoryChartConfig, topSuppliers: topSuppliersChartConfig };
@@ -1448,7 +1623,7 @@
 
                   const data = await fileProcessor.processMainFile(file, onProgress);
                   
-                  setStatusMessage('Saving data to browser...');
+                  setStatusMessage('Encrypting and saving data...');
                   setProgress(90);
                   await dbService.clearAllData();
                   await dbService.saveData(data, {}, {});
@@ -1471,7 +1646,7 @@
           const handleLoadSaved = useCallback(async function() {
               setIsLoading(true);
               setProgress(0);
-              setStatusMessage('Loading saved data...');
+              setStatusMessage('Loading and decrypting data...');
               try {
                   const { transactions, actions, assignments } = await dbService.loadData();
                   const books = await dbService.loadAllValidationBooks();
