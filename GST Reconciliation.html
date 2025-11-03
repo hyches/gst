@@ -495,7 +495,8 @@
                                 newRow['Document Date (2B)'] = '';
                                 newRow['Financial Year'] = 'Unknown';
                             }
-                            newRow['Remarks'] = String(newRow['Remarks'] ?? '');
+                            const remarksKey = Object.keys(newRow).find(function(k) { return k.toLowerCase() === 'remarks' || k.toLowerCase() === 'remark'; });
+                            newRow['Remarks'] = String((remarksKey ? newRow[remarksKey] : '') ?? '');
                             newRow['Supplier Name'] = String(newRow['Supplier Name'] ?? 'Unknown');
                             newRow['Document Number (2B)'] = String(newRow['Document Number (2B)'] ?? '');
                             newRow['Company Name'] = String(newRow['Company Name'] ?? 'Unknown');
