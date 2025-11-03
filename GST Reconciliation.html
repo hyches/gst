@@ -9,6 +9,7 @@
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@google/generative-ai/dist/index.min.js"></script>
     <script>
       tailwind.config = {
         theme: {
@@ -215,7 +216,7 @@
               const jwk = await window.crypto.subtle.exportKey("jwk", newKey);
               sessionStorage.setItem(KEY_STORAGE_ID, JSON.stringify(jwk));
               sessionKey = newKey;
-              return sessionKey;
+              return newKey;
           };
           
           const arrayBufferToBase64 = function(buffer) {
@@ -546,38 +547,46 @@
           };
       })();
 
-      // --- From services/geminiService.ts (with offline fallback) ---
+      // --- From services/geminiService.ts ---
       const geminiService = (function() {
+          let ai;
+          try {
+              if (typeof process !== 'undefined' && process.env && process.env.API_KEY && window.genai) {
+                  ai = new window.genai.GoogleGenAI({ apiKey: process.env.API_KEY });
+              }
+          } catch (e) {
+              console.error("Gemini AI could not be initialized. API_KEY might be missing.", e);
+          }
+
           const getFilterFromQueryOffline = async function(query, options) {
               const lowerQuery = query.toLowerCase();
               const response = { action: 'unknown' };
-              const detailsMatch = lowerQuery.match(/(details for|show details)\s+(.+)/);
-              if (detailsMatch && detailsMatch[2]) {
-                  response.action = 'details';
-                  response.supplier = detailsMatch[2].trim();
-                  response.matchedText = `details for ${response.supplier}`;
-                  return response;
-              }
               response.action = 'filter';
               const foundFilters = [];
-              options.companies.forEach(function(c) {
-                  if (lowerQuery.includes(c.toLowerCase())) {
-                      response.company = c;
-                      foundFilters.push(c);
-                  }
-              });
-              options.months.forEach(function(m) {
-                  if (lowerQuery.includes(m.toLowerCase())) {
-                      response.month = m;
-                      foundFilters.push(m);
-                  }
-              });
-              options.tags.forEach(function(t) {
-                  if (lowerQuery.includes(t.replace(/_/g, ' ').toLowerCase())) {
-                      response.tag = t;
-                      foundFilters.push(t);
-                  }
-              });
+              if (options.companies) {
+                  options.companies.forEach(function(c) {
+                      if (lowerQuery.includes(c.toLowerCase())) {
+                          response.company = [c];
+                          foundFilters.push(c);
+                      }
+                  });
+              }
+              if (options.months) {
+                  options.months.forEach(function(m) {
+                      if (lowerQuery.includes(m.toLowerCase())) {
+                          response.month = [m];
+                          foundFilters.push(m);
+                      }
+                  });
+              }
+              if(options.tags) {
+                options.tags.forEach(function(t) {
+                    if (lowerQuery.includes(t.replace(/_/g, ' ').toLowerCase())) {
+                        response.tag = [t];
+                        foundFilters.push(t);
+                    }
+                });
+              }
               if (foundFilters.length > 0) {
                   response.matchedText = foundFilters.join(', ');
               } else {
@@ -586,7 +595,68 @@
               }
               return response;
           };
-          return { getFilterFromQuery: getFilterFromQueryOffline };
+
+          return {
+              isAvailable: function() { return !!ai },
+              getFilterFromQuery: async function(query, options) {
+                  if (!this.isAvailable()) {
+                      console.warn("Gemini not available, using offline filter logic.");
+                      return getFilterFromQueryOffline(query, options);
+                  }
+
+                  const systemInstruction = `You are an intelligent assistant for a GST dashboard. Your task is to interpret the user's natural language query and translate it into a JSON object for filtering data. Respond ONLY with a valid JSON object and nothing else.
+The JSON object should have an 'action' key, which can be 'filter' or 'details'.
+If the action is 'filter', include one or more of the following keys: 'company', 'financialYear', 'month', 'tag'. The values for these keys must be an array of strings, and each string must be one of the provided options.
+If the user asks for details about a specific supplier, set 'action' to 'details' and add a 'supplier' key with the supplier's name as a string.
+If you cannot determine any filters or actions, return an empty JSON object {}.
+If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), include both in the array.`;
+                  
+                  const userPrompt = `User query: "${query}"\n\nAvailable filter options:\n- Companies: ${JSON.stringify(options.companies)}\n- Financial Years: ${JSON.stringify(options.financialYears)}\n- Months: ${JSON.stringify(options.months)}\n- Tags: ${JSON.stringify(options.tags)}`;
+
+                  try {
+                    const response = await ai.models.generateContent({
+                        model: 'gemini-2.5-flash',
+                        contents: userPrompt,
+                        config: {
+                          systemInstruction: systemInstruction,
+                          responseMimeType: "application/json",
+                        }
+                    });
+                    const parsedJson = JSON.parse(response.text);
+                    if (parsedJson.action === 'filter') {
+                        const matched = Object.values(parsedJson).flat().join(', ');
+                        parsedJson.matchedText = matched || "filters cleared";
+                    } else if (parsedJson.action === 'details') {
+                        parsedJson.matchedText = `details for ${parsedJson.supplier}`;
+                    }
+                    return parsedJson;
+                  } catch (error) {
+                      console.error("Error calling Gemini API:", error);
+                      return { action: 'unknown', matchedText: "Sorry, I had trouble understanding that." };
+                  }
+              },
+              getAnalysis: async function(prompt, contextData) {
+                  if (!this.isAvailable()) {
+                      return "AI analysis is not available. Please ensure your API_KEY is configured.";
+                  }
+
+                  const fullPrompt = `Based on the following sample of GST transaction data, please provide a concise analysis answering the user's question. Format your response using markdown.\n\nData Sample (up to 25 rows):\n\`\`\`json\n${JSON.stringify(contextData.slice(0, 25), null, 2)}\n\`\`\`\n\nUser's Question: ${prompt}`;
+                  
+                  try {
+                      const response = await ai.models.generateContent({
+                          model: 'gemini-2.5-pro',
+                          contents: fullPrompt,
+                          config: {
+                            thinkingConfig: { thinkingBudget: 32768 }
+                          }
+                      });
+                      return response.text;
+                  } catch (error) {
+                      console.error("Error in AI analysis:", error);
+                      return `An error occurred while generating the analysis: ${error.message}`;
+                  }
+              }
+          };
       })();
 
 
@@ -597,10 +667,13 @@
       const SvgIconUpDownCompact = function({ d, className }) { return React.createElement('svg', { xmlns: "http://www.w3.org/2000/svg", className, fill: "none", viewBox: "0 0 24 24", strokeWidth: 2.5, stroke: "currentColor" }, React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", d })) };
 
       const Icons = {
+          BriefcaseIcon: function({ className }) { return React.createElement(SvgIcon, { className, d: "M20.25 14.15v4.004a.75.75 0 01-.75.75H4.5a.75.75 0 01-.75-.75v-4.004M18 9.348a2.25 2.25 0 00-2.25-2.25h-1.25A2.25 2.25 0 0012 9.348V11.25h6V9.348zM12 9.348a2.25 2.25 0 01-2.25-2.25h-1.25A2.25 2.25 0 016 9.348V11.25h6V9.348z" }) },
+          ShieldIcon: function({ className }) { return React.createElement(SvgIcon, { className, d: "M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5L12 1z" }) },
           FileUploadIcon: function({ className }) { return React.createElement(SvgIcon, { className, d: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" }) },
           DatabaseIcon: function({ className }) { return React.createElement(SvgIcon, { className, d: "M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7a8 8 0 0116 0M12 11a8 8 0 00-8 4" }) },
           TrashIcon: function({ className }) { return React.createElement(SvgIcon, { className, d: "M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" }) },
           ChatBubbleIcon: function({ className }) { return React.createElement(SvgIcon, { className, d: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" }) },
+          SparklesIcon: function({ className }) { return React.createElement(SvgIcon, { className, d: "M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0m-8.486 2.828L3 21m18-18l-2.122 2.122" })},
           ArrowUpIcon: function({ className }) { return React.createElement(SvgIconThick, { className, d: "M5 15l7-7 7 7" }) },
           ArrowDownIcon: function({ className }) { return React.createElement(SvgIconThick, { className, d: "M19 9l-7 7-7-7" }) },
           ChevronUpDownIcon: function({ className }) { return React.createElement(SvgIconUpDown, { className, d: "M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" }) },
@@ -612,6 +685,7 @@
           PrinterIcon: function({ className }) { return React.createElement(SvgIcon, { className, d: "M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H7a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm2-9V5a2 2 0 00-2-2H9a2 2 0 00-2 2v3m4-3h4" }) },
           ChevronUpDownIconCompact: function({ className }) { return React.createElement(SvgIconUpDownCompact, { className, d: "M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" }) },
           FunnelIcon: function({ className }) { return React.createElement(SvgIcon, { className, d: "M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L14 12.414V17a1 1 0 01-.293.707l-4 4A1 1 0 018 21v-8.586L3.293 6.707A1 1 0 013 6V4z" }) },
+          HomeIcon: function({ className }) { return React.createElement(SvgIcon, { className, d: "M2.25 12l8.954-8.955a.75.75 0 011.06 0l8.955 8.955a.75.75 0 01-1.06 1.06L12 4.061 3.31 13.06a.75.75 0 01-1.06-1.06zM12 21.75v-8.25" }) },
       };
 
       const Button = function({ variant = 'primary', children, icon, className, ...props }) {
@@ -639,8 +713,108 @@
               })
           );
       };
+      
+      const ProductCard = function({ title, description, icon, onClick, earlyAccess = false }) {
+        const WavyBg = () => e('svg', { 
+            className: 'absolute top-0 left-0 w-full h-full text-indigo-50/80 opacity-40 group-hover:opacity-60 transition-opacity z-0',
+            viewBox: "0 0 350 150",
+            preserveAspectRatio: "none"
+        }, e('path', { d: "M-1.33,49.99 C150.00,150.00 170.04,-49.98 350.00,49.99 L350.00,150.00 L0.00,150.00 Z", fill: "currentColor" }));
 
-      const StartupScreen = function({ onFileSelect, onLoadSaved, onClearSaved, onLoadMockData, statusMessage, isLoading, progress }) {
+        return e('div', { 
+            onClick,
+            className: 'relative bg-white p-6 rounded-xl shadow-sm border border-slate-200 cursor-pointer hover:shadow-lg hover:border-primary/50 transition-all group overflow-hidden' 
+        },
+            e(WavyBg, null),
+            e('div', { className: 'relative z-10 flex flex-col h-full' },
+                earlyAccess && e('div', { className: 'absolute top-0 right-0 bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded-full -mr-2 -mt-2' }, 'Early access'),
+                e('div', { className: 'mb-4' }, icon),
+                e('div', { className: 'flex-grow' },
+                    e('h3', { className: 'text-lg font-bold text-slate-800' }, title),
+                    e('p', { className: 'mt-1 text-sm text-slate-600' }, description)
+                )
+            )
+        );
+      };
+
+      const LoginPage = function({ onLoginSuccess }) {
+          const [username, setUsername] = useState('');
+          const [password, setPassword] = useState('');
+          const [error, setError] = useState('');
+
+          const handleLogin = function(e) {
+              e.preventDefault();
+              if (username === 'xxx' && password === 'xxx') {
+                  onLoginSuccess();
+              } else {
+                  setError('Invalid username or password.');
+              }
+          };
+
+          return e('div', { className: 'flex items-center justify-center min-h-screen p-4' },
+              e('div', { className: 'w-full max-w-sm' },
+                  e('div', { className: 'mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary-light mb-5' },
+                      e(Icons.BriefcaseIcon, { className: 'h-8 w-8 text-primary' })
+                  ),
+                  e('h1', { className: 'text-center text-3xl font-bold text-slate-800' }, 'Compliance Cloud'),
+                  e('div', { className: 'mt-8 bg-white p-8 rounded-xl shadow-md border border-slate-200' },
+                      e('form', { onSubmit: handleLogin, className: 'space-y-6' },
+                          e('div', null,
+                              e('label', { htmlFor: 'username', className: 'block text-sm font-medium text-slate-700' }, 'Username'),
+                              e('div', { className: 'mt-1' },
+                                  e(TextInput, { id: 'username', type: 'text', required: true, value: username, onChange: function(ev) { setUsername(ev.target.value) } })
+                              )
+                          ),
+                          e('div', null,
+                              e('label', { htmlFor: 'password', className: 'block text-sm font-medium text-slate-700' }, 'Password'),
+                              e('div', { className: 'mt-1' },
+                                  e(TextInput, { id: 'password', type: 'password', required: true, value: password, onChange: function(ev) { setPassword(ev.target.value) } })
+                              )
+                          ),
+                          error && e('p', { className: 'text-sm text-red-600' }, error),
+                          e('div', null,
+                              e(Button, { type: 'submit', className: 'w-full justify-center text-base py-3' }, 'Sign In')
+                          )
+                      )
+                  )
+              )
+          );
+      };
+
+      const MainLandingPage = function({ onNavigateToGst }) {
+          const cards = [
+              { 
+                  title: 'GST', 
+                  description: 'The ultimate app for all your Goods & Services Tax compliance needs.',
+                  icon: e(Icons.BriefcaseIcon, { className: 'w-10 h-10 text-red-600' }),
+                  onClick: onNavigateToGst
+              },
+              { 
+                  title: 'TDS',
+                  description: 'End-to-end TDS filing, challan payments, reports, certificate generation and more.',
+                  icon: e(Icons.CashIcon, { className: 'w-10 h-10 text-orange-500' }),
+                  onClick: () => alert('TDS module coming soon!')
+              },
+              { 
+                  title: 'Notice Tracker',
+                  description: 'Review and track all your notices from the government.',
+                  icon: e(Icons.ShieldIcon, { className: 'w-10 h-10 text-teal-500' }),
+                  onClick: () => alert('Notice Tracker coming soon!')
+              }
+          ];
+
+          return e('div', { className: 'min-h-screen bg-gradient-to-br from-indigo-50 to-white p-6 sm:p-8' },
+              e('div', { className: 'max-w-screen-xl mx-auto' },
+                  e('h1', { className: 'text-3xl font-bold text-slate-800' }, 'Welcome, Harish'),
+                  e('h2', { className: 'mt-2 text-xl text-slate-600' }, 'Clear Compliance Cloud'),
+                  e('div', { className: 'mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' },
+                      cards.map(function(card) { return e(ProductCard, { key: card.title, ...card }) })
+                  )
+              )
+          );
+      };
+
+      const StartupScreen = function({ onFileSelect, onLoadSaved, onClearSaved, onLoadMockData, statusMessage, isLoading, progress, onNavigateToHome }) {
         const fileInputRef = useRef(null);
         const handleFileChange = function(event) {
           const file = event.target.files?.[0];
@@ -652,7 +826,10 @@
           fileInputRef.current?.click();
         };
 
-        return React.createElement('div', { className: 'flex items-center justify-center min-h-screen p-4' },
+        return React.createElement('div', { className: 'flex items-center justify-center min-h-screen p-4 relative' },
+          React.createElement('div', { className: 'absolute top-4 left-4' },
+            React.createElement(Button, { onClick: onNavigateToHome, variant: 'secondary', icon: React.createElement(Icons.HomeIcon, { className: 'h-5 w-5' }) }, 'Home')
+          ),
           React.createElement('div', { className: 'w-full max-w-md text-center' },
             React.createElement('div', { className: 'mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary-light mb-5' },
               React.createElement(Icons.ReceiptIcon, { className: 'h-8 w-8 text-primary' })
@@ -787,9 +964,9 @@
           return React.createElement(Select, { value, options: ACTION_OPTIONS.filter(function(o) { return o !== 'None' }), onChange: handleChange, className: "w-40" });
       };
       
-      const Chatbot = function({ slicerOptions, onFilterChange }) {
+      const Chatbot = function({ slicerOptions, onFilterChange, setPrintModalData, allData }) {
           const [isOpen, setIsOpen] = useState(false);
-          const [messages, setMessages] = useState([{ text: "Hi! How can I help you filter the GST data? (e.g., 'show ABC pvt ltd', 'filter Sep', 'details for XYZ traders')", sender: 'bot' }]);
+          const [messages, setMessages] = useState([{ text: "Hi! I'm an AI assistant. How can I help you filter or analyze the GST data? (e.g., 'show Stark Industries in June', 'details for Wayne Enterprises')", sender: 'bot' }]);
           const [input, setInput] = useState('');
           const messagesEndRef = useRef(null);
 
@@ -798,28 +975,36 @@
           }, [messages]);
 
           const handleSend = async function() {
-              if (!input.trim()) return;
+              if (!input.trim() || !geminiService.isAvailable()) {
+                  if(!geminiService.isAvailable()) {
+                      alert("AI Assistant is not available. Please configure your API_KEY.");
+                  }
+                  return;
+              };
               const userMessage = { text: input, sender: 'user' };
               setMessages(function(prev) { return [...prev, userMessage, { text: 'Thinking...', sender: 'bot', isThinking: true }] });
               setInput('');
 
-              const options = {
-                  companies: slicerOptions.companies,
-                  months: slicerOptions.months,
-                  tags: slicerOptions.tags.filter(function(t) { return t !== 'All' }),
-              };
-
-              const interpretation = await geminiService.getFilterFromQuery(userMessage.text, options);
+              const interpretation = await geminiService.getFilterFromQuery(userMessage.text, slicerOptions);
 
               setMessages(function(prev) { return prev.filter(function(m) { return !m.isThinking }) });
 
               if (interpretation.action === 'filter') {
                   const newFilters = {};
-                  if (interpretation.company) newFilters.company = [interpretation.company];
-                  if (interpretation.month) newFilters.month = [interpretation.month];
-                  if (interpretation.tag) newFilters.tag = [interpretation.tag];
+                  if (interpretation.company) newFilters.company = interpretation.company;
+                  if (interpretation.financialYear) newFilters.financialYear = interpretation.financialYear;
+                  if (interpretation.month) newFilters.month = interpretation.month;
+                  if (interpretation.tag) newFilters.tag = interpretation.tag;
                   onFilterChange(newFilters);
                   setMessages(function(prev) { return [...prev, { text: `OK, I've applied the filters for: ${interpretation.matchedText}. Check the dashboard.`, sender: 'bot' }] });
+              } else if (interpretation.action === 'details' && interpretation.supplier) {
+                  const supplierData = allData.filter(function(row) { return row['Supplier Name'] === interpretation.supplier });
+                   if (supplierData.length > 0) {
+                      setPrintModalData({ isOpen: true, category: `Details for ${interpretation.supplier}`, data: supplierData });
+                      setMessages(function(prev) { return [...prev, { text: `Showing details for ${interpretation.supplier}.`, sender: 'bot' }] });
+                  } else {
+                      setMessages(function(prev) { return [...prev, { text: `I couldn't find any data for a supplier named "${interpretation.supplier}".`, sender: 'bot' }] });
+                  }
               } else {
                   setMessages(function(prev) { return [...prev, { text: interpretation.matchedText || "Sorry, I couldn't understand that. Please try again.", sender: 'bot' }] });
               }
@@ -831,7 +1016,7 @@
 
           return React.createElement('div', { className: 'fixed bottom-5 right-5 w-[350px] h-[500px] bg-white rounded-lg shadow-2xl z-40 flex flex-col' },
               React.createElement('div', { className: 'p-4 border-b flex justify-between items-center' },
-                  React.createElement('h3', { className: 'font-semibold text-lg' }, 'MGST Assistant'),
+                  React.createElement('h3', { className: 'font-semibold text-lg' }, 'MGST AI Assistant'),
                   React.createElement('button', { onClick: function() { setIsOpen(false) }, className: 'text-2xl text-slate-500 hover:text-slate-800' }, '×')
               ),
               React.createElement('div', { ref: messagesEndRef, className: 'flex-grow p-4 overflow-y-auto' },
@@ -1348,12 +1533,74 @@
               )
           );
       };
+      
+      const ThinkingModeModal = function({ isOpen, onClose, contextData }) {
+          const [prompt, setPrompt] = useState('');
+          const [response, setResponse] = useState('');
+          const [isLoading, setIsLoading] = useState(false);
+
+          if (!isOpen) return null;
+
+          const handleSubmit = async function() {
+              if (!prompt.trim() || !geminiService.isAvailable()) {
+                  if(!geminiService.isAvailable()) {
+                      alert("AI analysis is not available. Please configure your API_KEY.");
+                  }
+                  return;
+              };
+              setIsLoading(true);
+              setResponse('');
+              const analysis = await geminiService.getAnalysis(prompt, contextData);
+              setResponse(analysis);
+              setIsLoading(false);
+          };
+
+          return e('div', { className: 'fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4' },
+              e('div', { className: 'bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col' },
+                  e('div', { className: 'p-4 border-b flex justify-between items-center' },
+                      e('h2', { className: 'text-xl font-bold' }, 'Analyze with AI (Thinking Mode)'),
+                      e('button', { onClick: onClose, className: 'text-2xl' }, '×')
+                  ),
+                  e('div', { className: 'p-4 flex-grow flex flex-col gap-4' },
+                      e('div', null,
+                          e('label', { htmlFor: 'ai-prompt', className: 'block text-sm font-medium text-slate-700 mb-1' }, 'Ask a complex question about the current data view:'),
+                          e('textarea', { 
+                              id: 'ai-prompt',
+                              rows: 4, 
+                              value: prompt,
+                              onChange: function(e) { setPrompt(e.target.value) },
+                              className: 'w-full rounded-md border-slate-300 shadow-sm text-sm focus:border-primary focus:ring-1 focus:ring-primary',
+                              placeholder: 'e.g., "What are the common trends for suppliers with missing GST in the last quarter?" or "Summarize the top 3 suppliers by missing GST and suggest an action plan."'
+                          })
+                      ),
+                      e('div', null,
+                          e(Button, { onClick: handleSubmit, disabled: isLoading || !prompt.trim(), icon: e(Icons.SparklesIcon, { className: 'w-5 h-5'}) },
+                              isLoading ? 'Analyzing...' : 'Submit to AI'
+                          )
+                      ),
+                      (isLoading || response) && e('div', { className: 'border-t pt-4 flex-grow overflow-y-auto' },
+                          isLoading ? e('div', { className: 'flex items-center gap-2 text-slate-600' }, 
+                              e('div', { className: 'w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin' }),
+                              e('span', null, 'The AI is thinking... this may take a moment.')
+                          ) :
+                          e('pre', { className: 'bg-slate-50 p-3 rounded-md text-sm text-slate-800 whitespace-pre-wrap font-sans' }, response)
+                      )
+                  ),
+                  e('div', { className: 'p-4 border-t flex justify-end' },
+                      e(Button, { onClick: onClose, variant: 'secondary' }, 'Close')
+                  )
+              )
+          );
+      };
 
       const Dashboard = function({
         allData, slicerOptions, filters, setFilters, actionState, updateAction,
         assignmentState, updateAssignment, clearAllData, onValidateWithBooks,
-        validationBooks, activeTab, setActiveTab, onKpiClick, setPrintModalData
+        validationBooks, activeTab, setActiveTab, onKpiClick, setPrintModalData,
+        onNavigateToHome
       }) {
+          const [isThinkingModalOpen, setIsThinkingModalOpen] = useState(false);
+          
           const filteredData = useMemo(function() {
               const { company, financialYear, month, tag } = filters;
               if (!allData) return [];
@@ -1484,13 +1731,17 @@
           
           const Header = function() { return React.createElement('header', { className: 'bg-white shadow-sm w-full p-3' },
               React.createElement('div', { className: 'max-w-screen-2xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4' },
-                  React.createElement('h1', { className: 'text-xl font-bold text-primary-dark shrink-0' }, 'GST Reconciliation Dashboard'),
+                  React.createElement('div', { className: 'flex items-center' },
+                      React.createElement('h1', { className: 'text-xl font-bold text-primary-dark shrink-0' }, 'GST Reconciliation Dashboard'),
+                      React.createElement(Button, { onClick: onNavigateToHome, variant: 'ghost', className: 'ml-4', icon: React.createElement(Icons.HomeIcon, { className: 'h-5 w-5' }) }, 'Home')
+                  ),
                   React.createElement('div', { className: 'flex flex-wrap justify-center md:justify-end gap-3 w-full items-center' },
                       React.createElement(MultiSelect, { label: 'Company', values: filters.company, options: slicerOptions.companies, onChange: function(v) { setFilters(function(f) { return {...f, company: v}}) }, className: 'w-40' }),
                       React.createElement(MultiSelect, { label: 'FY', values: filters.financialYear, options: slicerOptions.financialYears, onChange: function(v) { setFilters(function(f) { return {...f, financialYear: v}}) }, className: 'w-28' }),
                       React.createElement(MultiSelect, { label: 'Month', values: filters.month, options: slicerOptions.months, onChange: function(v) { setFilters(function(f) { return {...f, month: v}}) }, className: 'w-32' }),
                       React.createElement(MultiSelect, { label: 'Tag (Type)', values: filters.tag, options: slicerOptions.tags, onChange: function(v) { setFilters(function(f) { return {...f, tag: v}}) }, className: 'w-48' }),
-                      React.createElement(Button, { onClick: clearAllData, variant: 'danger-ghost', icon: React.createElement(Icons.TrashIcon, { className: 'w-4 h-4' }) }, 'Clear & Upload')
+                      React.createElement(Button, { onClick: function() { setIsThinkingModalOpen(true) }, variant: 'secondary', icon: e(Icons.SparklesIcon, { className: 'h-4 w-4' }) }, 'Analyze with AI'),
+                      React.createElement(Button, { onClick: clearAllData, variant: 'danger-ghost', icon: React.createElement(Icons.TrashIcon, { className: 'w-4 h-4' }) }, 'Clear')
                   )
               )
           )};
@@ -1545,6 +1796,11 @@
           )};
           
           return React.createElement('div', { className: 'min-h-screen flex flex-col' },
+              React.createElement(ThinkingModeModal, { 
+                  isOpen: isThinkingModalOpen, 
+                  onClose: function() { setIsThinkingModalOpen(false) },
+                  contextData: filteredData
+              }),
               React.createElement('div', { className: 'sticky top-0 z-20' },
                   React.createElement(Header, null),
                   React.createElement(Navigation, null)
@@ -1556,7 +1812,20 @@
                   activeTab === 'Mailing List' && React.createElement(MailingListPage, { allData: allData, actionState: actionState, assignmentState: assignmentState, setPrintModalData: setPrintModalData }),
                   activeTab === 'Validate with Books' && React.createElement(ValidationPage, { allData: allData, validationBooks: validationBooks, onValidateWithBooks: onValidateWithBooks })
               ),
-              React.createElement(Chatbot, { slicerOptions, onFilterChange: function(newFilters) { setFilters(function(f) { return {...f, ...newFilters}}) } })
+              React.createElement(Chatbot, { 
+                  slicerOptions,
+                  allData,
+                  onFilterChange: function(newFilters) { 
+                      setFilters(function(f) { 
+                          const updated = {...f};
+                          Object.keys(newFilters).forEach(function(key) {
+                              updated[key] = newFilters[key];
+                          });
+                          return updated;
+                      });
+                  },
+                  setPrintModalData: setPrintModalData
+              })
           );
       };
       
@@ -1575,9 +1844,10 @@
       ];
 
       const App = function() {
-          const [view, setView] = useState('startup');
-          const [isLoading, setIsLoading] = useState(true);
-          const [statusMessage, setStatusMessage] = useState('Checking for saved data...');
+          const [isAuthenticated, setIsAuthenticated] = useState(false);
+          const [view, setView] = useState('main_landing');
+          const [isLoading, setIsLoading] = useState(false);
+          const [statusMessage, setStatusMessage] = useState('');
           const [progress, setProgress] = useState(0);
           const [allData, setAllData] = useState([]);
           const [actionState, setActionState] = useState({});
@@ -1602,11 +1872,25 @@
                   setFilters({ company: [], financialYear: [], month: [], tag: [] });
                   setView('dashboard');
               } else {
+                  // This case should ideally not be hit if initialize is only called with data,
+                  // but as a fallback, go to startup.
                   setView('startup');
               }
               setIsLoading(false);
           }, []);
 
+          const handleNavigateToGst = function() {
+              if (allData.length > 0) {
+                  setView('dashboard');
+              } else {
+                  setView('startup');
+              }
+          };
+
+          const handleNavigateToHome = function() {
+              setView('main_landing');
+          };
+          
           const handleFileSelect = async function(file) {
               setIsLoading(true);
               setProgress(10);
@@ -1615,8 +1899,6 @@
                   await new Promise(function(res) { return setTimeout(res, 200) });
                   
                   const onProgress = function(p, msg) {
-                      // Progress from processMainFile will be 0 to 1.
-                      // Map it to the 10-80% range for processing.
                       setProgress(10 + p * 70);
                       setStatusMessage(msg || `Processing data... ${Math.round(p * 100)}%`);
                   };
@@ -1654,15 +1936,15 @@
                       initializeData(transactions, actions, assignments, books);
                       setStatusMessage('');
                   } else {
-                      setStatusMessage('No saved data found. Please upload a file.');
                       setIsLoading(false);
-                      setView('startup');
+                      setStatusMessage('No saved data found or session is invalid. Please upload a file.');
+                      // Do not change view, stay on startup screen
                   }
               } catch (error) {
                   const message = error instanceof Error ? error.message : "An unknown error occurred.";
                   setStatusMessage(`Error loading data: ${message}`);
                   setIsLoading(false);
-                  setView('startup');
+                  // Do not change view, stay on startup screen
               }
           }, [initializeData]);
 
@@ -1693,8 +1975,10 @@
           };
           
           useEffect(function() {
-              handleLoadSaved();
-          }, [handleLoadSaved]);
+            if (sessionStorage.getItem('gst_dashboard_auth') === 'true') {
+                setIsAuthenticated(true);
+            }
+          }, []);
 
           const FullScreenLoader = function({ message }) { return React.createElement('div', { className: "fixed inset-0 bg-slate-900/40 z-50 flex flex-col items-center justify-center backdrop-blur-sm" },
               React.createElement('div', { className: 'w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin' }),
@@ -1780,10 +2064,20 @@
               }
           };
 
+          if (!isAuthenticated) {
+              return e(LoginPage, { onLoginSuccess: function() {
+                  sessionStorage.setItem('gst_dashboard_auth', 'true');
+                  setIsAuthenticated(true);
+              } });
+          }
+
           return React.createElement(Fragment, null,
               (isLoading && view === 'dashboard') && React.createElement(FullScreenLoader, { message: statusMessage }),
               React.createElement(PrintModal, { printModalData, setPrintModalData, actionState }),
               React.createElement('div', { style: { display: (isLoading && view === 'dashboard') ? 'none' : 'block' } },
+                  view === 'main_landing' && React.createElement(MainLandingPage, { 
+                      onNavigateToGst: handleNavigateToGst 
+                  }),
                   view === 'startup' && React.createElement(StartupScreen, { 
                       onFileSelect: handleFileSelect, 
                       onLoadSaved: handleLoadSaved, 
@@ -1792,6 +2086,7 @@
                       statusMessage,
                       isLoading,
                       progress,
+                      onNavigateToHome: handleNavigateToHome,
                   }),
                   view === 'dashboard' && allData.length > 0 && 
                       React.createElement(Dashboard, { 
@@ -1809,7 +2104,8 @@
                           activeTab, 
                           setActiveTab, 
                           onKpiClick: handleKpiClick,
-                          setPrintModalData
+                          setPrintModalData,
+                          onNavigateToHome: handleNavigateToHome,
                       })
               )
           );
