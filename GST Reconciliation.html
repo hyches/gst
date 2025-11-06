@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI-Powered GST Dashboard</title>
+    <title>GST Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -12,6 +12,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@google/generative-ai/dist/index.min.js"></script>
     <script>
       tailwind.config = {
+        darkMode: 'class',
         theme: {
           extend: {
             colors: {
@@ -40,7 +41,7 @@
       /* Global styles can go here. Print-specific styles are now handled by the controlledPrint function. */
     </style>
   </head>
-  <body class="bg-indigo-50 antialiased">
+  <body class="bg-indigo-50 dark:bg-slate-900 antialiased">
     <div id="root"></div>
     <script type="module">
       const { useState, useEffect, useCallback, useMemo, useRef, StrictMode, Fragment } = React;
@@ -427,95 +428,153 @@
               }
           };
       })();
-
-      // --- From services/fileProcessor.ts ---
-      const fileProcessor = (function() {
-          const parseCurrency = function(v) {
+      
+      const fileProcessorWorkerScript = `
+        importScripts("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
+        
+        // Helper functions required by the worker
+        const MONTH_MAP = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
+        
+        const parseCurrency = (v) => {
             if (typeof v === 'number') return v;
             if (typeof v !== 'string') return 0;
             const c = v.replace(/[^0-9.-]+/g, "");
             const n = parseFloat(c);
             return isNaN(n) ? 0 : n;
-          };
+        };
+        
+        const parseDateString = (ds) => {
+            if (!ds) return null;
+            if (typeof ds === 'number') {
+              const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+              const dateObj = new Date(excelEpoch.getTime() + ds * 86400000);
+              return !isNaN(dateObj.getTime()) ? dateObj : null;
+            }
+            if (typeof ds !== 'string') return null;
+            const parts = ds.match(/(\\d{1,2})[/-](\\d{1,2})[/-](\\d{4})/);
+            if (parts) {
+              const day = parseInt(parts[1], 10);
+              const month = parseInt(parts[2], 10) - 1;
+              const year = parseInt(parts[3], 10);
+              const date = new Date(year, month, day);
+              if (!isNaN(date.getTime()) && date.getDate() === day) return date;
+            }
+            const nativeDate = new Date(ds);
+            return !isNaN(nativeDate.getTime()) ? nativeDate : null;
+        };
+
+        const getFinancialYear = (date) => {
+            const year = date.getFullYear();
+            const month = date.getMonth();
+            return month >= 3 ? \`\${year}-\${String(year + 1).slice(-2)}\` : \`\${year - 1}-\${String(year).slice(-2)}\`;
+        };
+        
+        self.onmessage = (event) => {
+            const file = event.data;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    if (!e.target?.result) throw new Error("File content is empty.");
+                    
+                    self.postMessage({ type: 'progress', payload: { progress: 0.1, message: 'Reading file contents...' } });
+                    
+                    const data = new Uint8Array(e.target.result);
+                    self.postMessage({ type: 'progress', payload: { progress: 0.2, message: 'Parsing Excel workbook...' } });
+                    const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                    
+                    const sheetName = 'Transactions';
+                    if (!workbook.SheetNames.includes(sheetName)) {
+                      throw new Error(\`Sheet "\${sheetName}" not found in the Excel file.\`);
+                    }
+                    const worksheet = workbook.Sheets[sheetName];
+                    
+                    self.postMessage({ type: 'progress', payload: { progress: 0.4, message: 'Converting sheet to JSON...' } });
+                    const rawData = XLSX.utils.sheet_to_json(worksheet, { raw: false, defval: null });
+                    
+                    if (!Array.isArray(rawData) || rawData.length === 0) {
+                      throw new Error("No data found in the 'Transactions' sheet.");
+                    }
+                    
+                    const processedData = [];
+                    const totalRows = rawData.length;
+
+                    for (let i = 0; i < totalRows; i++) {
+                      const row = rawData[i];
+                      if (typeof row !== 'object' || row === null) continue;
+                      const newRow = { id: \`row_\${i}\` };
+                      Object.keys(row).forEach((key) => {
+                          if (key && !key.startsWith('__EMPTY')) {
+                              newRow[key.trim()] = typeof row[key] === 'string' ? row[key].trim() : row[key];
+                          }
+                      });
+                      newRow['Type'] = String(newRow['Type'] ?? newRow['Tag (Type)'] ?? "");
+                      newRow['Sum of Taxable Value (2B)'] = parseCurrency(newRow['Sum of Taxable Value (2B)']);
+                      newRow['Sum of IGST (2B)'] = parseCurrency(newRow['Sum of IGST (2B)']);
+                      newRow['Sum of CGST (2B)'] = parseCurrency(newRow['Sum of CGST (2B)']);
+                      newRow['Sum of SGST (2B)'] = parseCurrency(newRow['Sum of SGST (2B)']);
+                      newRow['Total GST'] = (newRow['Sum of IGST (2B)'] ?? 0) + (newRow['Sum of CGST (2B)'] ?? 0) + (newRow['Sum of SGST (2B)'] ?? 0);
+                      const docDateObj = parseDateString(newRow['Document Date (2B)']);
+                      if (docDateObj) {
+                          newRow['Document Date (2B)'] = docDateObj.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\\//g, '-');
+                          newRow['Financial Year'] = getFinancialYear(docDateObj);
+                      } else {
+                          newRow['Document Date (2B)'] = '';
+                          newRow['Financial Year'] = 'Unknown';
+                      }
+                      const remarksKey = Object.keys(newRow).find((k) => k.toLowerCase() === 'remarks' || k.toLowerCase() === 'remark');
+                      newRow['Remarks'] = String((remarksKey ? newRow[remarksKey] : '') ?? '');
+                      newRow['Supplier Name'] = String(newRow['Supplier Name'] ?? 'Unknown');
+                      newRow['Document Number (2B)'] = String(newRow['Document Number (2B)'] ?? '');
+                      newRow['Company Name'] = String(newRow['Company Name'] ?? 'Unknown');
+                      newRow['Month'] = String(newRow['Month'] ?? 'Unknown');
+                      processedData.push(newRow);
+
+                      if (i % 200 === 0) {
+                          const progress = i / totalRows;
+                          self.postMessage({ type: 'progress', payload: { progress: 0.5 + progress * 0.5, message: \`Processing rows... \${i} / \${totalRows}\` } });
+                      }
+                    }
+                    
+                    self.postMessage({ type: 'result', payload: processedData });
+                } catch (error) {
+                    self.postMessage({ type: 'error', payload: error.message });
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        };
+      `;
+
+      // --- From services/fileProcessor.ts ---
+      const fileProcessor = (function() {
           return {
               processMainFile: function(file, onProgress) {
                 return new Promise(function(resolve, reject) {
-                  const reader = new FileReader();
-                  reader.onload = async function(e) {
-                    try {
-                      if (!e.target?.result) return reject(new Error("File content is empty."));
-                      
-                      onProgress(0.1, 'Reading file contents...');
-                      await new Promise(function(res) { return setTimeout(res, 0) });
-                      const data = new Uint8Array(e.target.result);
-                      
-                      onProgress(0.2, 'Parsing Excel workbook...');
-                      await new Promise(function(res) { return setTimeout(res, 0) });
-                      const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-                      
-                      const sheetName = 'Transactions';
-                      if (!workbook.SheetNames.includes(sheetName)) {
-                        return reject(new Error(`Sheet "${sheetName}" not found in the Excel file.`));
+                  const workerBlob = new Blob([fileProcessorWorkerScript], { type: 'application/javascript' });
+                  const workerUrl = URL.createObjectURL(workerBlob);
+                  const worker = new Worker(workerUrl);
+                  
+                  worker.onmessage = function(e) {
+                      const { type, payload } = e.data;
+                      if (type === 'progress') {
+                          onProgress(payload.progress, payload.message);
+                      } else if (type === 'result') {
+                          resolve(payload);
+                          worker.terminate();
+                          URL.revokeObjectURL(workerUrl);
+                      } else if (type === 'error') {
+                          reject(new Error(payload));
+                          worker.terminate();
+                          URL.revokeObjectURL(workerUrl);
                       }
-                      const worksheet = workbook.Sheets[sheetName];
-                      
-                      onProgress(0.4, 'Converting sheet to JSON...');
-                      await new Promise(function(res) { return setTimeout(res, 0) });
-                      const rawData = XLSX.utils.sheet_to_json(worksheet, { raw: false, defval: null });
-                      
-                      if (!Array.isArray(rawData) || rawData.length === 0) {
-                        return reject(new Error("No data found in the 'Transactions' sheet."));
-                      }
-                      
-                      const processedData = [];
-                      const totalRows = rawData.length;
-                      const chunkSize = 200;
-
-                      for (let i = 0; i < totalRows; i += chunkSize) {
-                        const chunk = rawData.slice(i, i + chunkSize);
-                        chunk.forEach(function(row, index) {
-                            if (typeof row !== 'object' || row === null) return null;
-                            const newRow = { id: `row_${i + index}` };
-                            Object.keys(row).forEach(function(key) {
-                                if (key && !key.startsWith('__EMPTY')) {
-                                    newRow[key.trim()] = typeof row[key] === 'string' ? row[key].trim() : row[key];
-                                }
-                            });
-                            newRow['Type'] = String(newRow['Type'] ?? newRow['Tag (Type)'] ?? "");
-                            newRow['Sum of Taxable Value (2B)'] = parseCurrency(newRow['Sum of Taxable Value (2B)']);
-                            newRow['Sum of IGST (2B)'] = parseCurrency(newRow['Sum of IGST (2B)']);
-                            newRow['Sum of CGST (2B)'] = parseCurrency(newRow['Sum of CGST (2B)']);
-                            newRow['Sum of SGST (2B)'] = parseCurrency(newRow['Sum of SGST (2B)']);
-                            newRow['Total GST'] = (newRow['Sum of IGST (2B)'] ?? 0) + (newRow['Sum of CGST (2B)'] ?? 0) + (newRow['Sum of SGST (2B)'] ?? 0);
-                            const docDateObj = parseDateString(newRow['Document Date (2B)']);
-                            if (docDateObj) {
-                                newRow['Document Date (2B)'] = docDateObj.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-');
-                                newRow['Financial Year'] = getFinancialYear(docDateObj);
-                            } else {
-                                newRow['Document Date (2B)'] = '';
-                                newRow['Financial Year'] = 'Unknown';
-                            }
-                            const remarksKey = Object.keys(newRow).find(function(k) { return k.toLowerCase() === 'remarks' || k.toLowerCase() === 'remark'; });
-                            newRow['Remarks'] = String((remarksKey ? newRow[remarksKey] : '') ?? '');
-                            newRow['Supplier Name'] = String(newRow['Supplier Name'] ?? 'Unknown');
-                            newRow['Document Number (2B)'] = String(newRow['Document Number (2B)'] ?? '');
-                            newRow['Company Name'] = String(newRow['Company Name'] ?? 'Unknown');
-                            newRow['Month'] = String(newRow['Month'] ?? 'Unknown');
-                            processedData.push(newRow);
-                        });
-
-                        const progress = (i + chunkSize) / totalRows;
-                        onProgress(0.5 + progress * 0.5, `Processing rows... ${Math.min(i + chunkSize, totalRows)} / ${totalRows}`);
-                        await new Promise(function(res) { return setTimeout(res, 0) });
-                      }
-                      
-                      resolve(processedData.filter(function(r) { return r !== null }));
-                    } catch (error) {
-                      reject(error);
-                    }
                   };
-                  reader.onerror = function(error) { reject(error) };
-                  reader.readAsArrayBuffer(file);
+
+                  worker.onerror = function(e) {
+                      reject(new Error(`Worker error: ${e.message}`));
+                      worker.terminate();
+                      URL.revokeObjectURL(workerUrl);
+                  };
+
+                  worker.postMessage(file);
                 });
               },
               processBooksFile: function(file) {
@@ -664,6 +723,28 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
 
 
       // --- React Components ---
+      class ErrorBoundary extends React.Component {
+        constructor(props) {
+          super(props);
+          this.state = { hasError: false, error: null };
+        }
+        static getDerivedStateFromError(error) {
+          return { hasError: true, error };
+        }
+        componentDidCatch(error, errorInfo) {
+          console.error("ErrorBoundary caught an error:", error, errorInfo);
+        }
+        render() {
+          if (this.state.hasError) {
+            return e('div', { className: 'bg-red-100 dark:bg-red-900/20 border border-red-400 dark:border-red-500/30 text-red-700 dark:text-red-300 px-4 py-3 rounded relative text-sm' },
+              e('strong', { className: 'font-bold' }, 'Something went wrong. '),
+              e('span', { className: 'block sm:inline' }, this.props.message || 'This component could not be loaded.')
+            );
+          }
+          return this.props.children;
+        }
+      }
+
       const SvgIcon = function({ d, className }) { return React.createElement('svg', { xmlns: "http://www.w3.org/2000/svg", className, fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2 }, React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", d })) };
       const SvgIconThick = function({ d, className }) { return React.createElement('svg', { xmlns: "http://www.w3.org/2000/svg", className, fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 3 }, React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", d })) };
       const SvgIconUpDown = function({ d, className }) { return React.createElement('svg', { xmlns: "http://www.w3.org/2000/svg", className, fill: "none", viewBox: "0 0 24 24", strokeWidth: 1.5, stroke: "currentColor" }, React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", d })) };
@@ -675,7 +756,7 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
           FileUploadIcon: function({ className }) { return React.createElement(SvgIcon, { className, d: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" }) },
           DatabaseIcon: function({ className }) { return React.createElement(SvgIcon, { className, d: "M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7a8 8 0 0116 0M12 11a8 8 0 00-8 4" }) },
           TrashIcon: function({ className }) { return React.createElement(SvgIcon, { className, d: "M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" }) },
-          ChatBubbleIcon: function({ className }) { return React.createElement(SvgIcon, { className, d: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" }) },
+          ChatBubbleIcon: function({ className }) { return React.createElement(SvgIcon, { className, d: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 8 8z" }) },
           SparklesIcon: function({ className }) { return React.createElement(SvgIcon, { className, d: "M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0m-8.486 2.828L3 21m18-18l-2.122 2.122" })},
           ArrowUpIcon: function({ className }) { return React.createElement(SvgIconThick, { className, d: "M5 15l7-7 7 7" }) },
           ArrowDownIcon: function({ className }) { return React.createElement(SvgIconThick, { className, d: "M19 9l-7 7-7-7" }) },
@@ -689,6 +770,10 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
           ChevronUpDownIconCompact: function({ className }) { return React.createElement(SvgIconUpDownCompact, { className, d: "M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" }) },
           FunnelIcon: function({ className }) { return React.createElement(SvgIcon, { className, d: "M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L14 12.414V17a1 1 0 01-.293.707l-4 4A1 1 0 018 21v-8.586L3.293 6.707A1 1 0 013 6V4z" }) },
           HomeIcon: function({ className }) { return React.createElement(SvgIcon, { className, d: "M2.25 12l8.954-8.955a.75.75 0 011.06 0l8.955 8.955a.75.75 0 01-1.06 1.06L12 4.061 3.31 13.06a.75.75 0 01-1.06-1.06zM12 21.75v-8.25" }) },
+          SunIcon: function({ className }) { return React.createElement(SvgIcon, { className, d: "M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" }) },
+          MoonIcon: function({ className }) { return React.createElement(SvgIcon, { className, d: "M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" }) },
+          BookmarkIcon: function({ className }) { return React.createElement(SvgIcon, { className, d: "M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" }) },
+          XMarkIcon: function({ className }) { return React.createElement(SvgIcon, { className, d: "M6 18L18 6M6 6l12 12" }) },
       };
 
       const Button = function({ variant = 'primary', children, icon, className, ...props }) {
@@ -697,7 +782,7 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
           primary: 'bg-primary text-white hover:bg-primary-hover focus:ring-primary',
           secondary: 'bg-slate-600 text-white hover:bg-slate-700 focus:ring-slate-500',
           danger: 'bg-danger text-white hover:bg-danger-hover focus:ring-danger',
-          ghost: 'bg-transparent text-slate-700 hover:bg-slate-200 focus:ring-primary',
+          ghost: 'bg-transparent text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 focus:ring-primary',
           'danger-ghost': 'bg-transparent text-danger hover:bg-danger/10 focus:ring-danger'
         };
         const finalClassName = `${baseClasses} ${variantClasses[variant]} ${className || ''}`;
@@ -709,7 +794,7 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
       };
 
       const ProgressBar = function({ progress }) {
-          return React.createElement('div', { className: 'w-full bg-slate-200 rounded-full h-2.5' },
+          return React.createElement('div', { className: 'w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5' },
               React.createElement('div', { 
                   className: 'bg-primary h-2.5 rounded-full transition-all duration-300 ease-in-out', 
                   style: { width: `${progress}%` } 
@@ -719,22 +804,22 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
       
       const ProductCard = function({ title, description, icon, onClick, earlyAccess = false }) {
         const WavyBg = () => e('svg', { 
-            className: 'absolute top-0 left-0 w-full h-full text-indigo-50/80 opacity-40 group-hover:opacity-60 transition-opacity z-0',
+            className: 'absolute top-0 left-0 w-full h-full text-indigo-50/80 dark:text-slate-800/50 opacity-40 group-hover:opacity-60 transition-opacity z-0',
             viewBox: "0 0 350 150",
             preserveAspectRatio: "none"
         }, e('path', { d: "M-1.33,49.99 C150.00,150.00 170.04,-49.98 350.00,49.99 L350.00,150.00 L0.00,150.00 Z", fill: "currentColor" }));
 
         return e('div', { 
             onClick,
-            className: 'relative bg-white p-6 rounded-xl shadow-sm border border-slate-200 cursor-pointer hover:shadow-lg hover:border-primary/50 transition-all group overflow-hidden' 
+            className: 'relative bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 cursor-pointer hover:shadow-lg hover:border-primary/50 dark:hover:border-primary transition-all group overflow-hidden' 
         },
             e(WavyBg, null),
             e('div', { className: 'relative z-10 flex flex-col h-full' },
                 earlyAccess && e('div', { className: 'absolute top-0 right-0 bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded-full -mr-2 -mt-2' }, 'Early access'),
                 e('div', { className: 'mb-4' }, icon),
                 e('div', { className: 'flex-grow' },
-                    e('h3', { className: 'text-lg font-bold text-slate-800' }, title),
-                    e('p', { className: 'mt-1 text-sm text-slate-600' }, description)
+                    e('h3', { className: 'text-lg font-bold text-slate-800 dark:text-slate-100' }, title),
+                    e('p', { className: 'mt-1 text-sm text-slate-600 dark:text-slate-400' }, description)
                 )
             )
         );
@@ -756,20 +841,20 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
 
           return e('div', { className: 'flex items-center justify-center min-h-screen p-4' },
               e('div', { className: 'w-full max-w-sm' },
-                  e('div', { className: 'mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary-light mb-5' },
+                  e('div', { className: 'mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary-light dark:bg-primary/20 mb-5' },
                       e(Icons.BriefcaseIcon, { className: 'h-8 w-8 text-primary' })
                   ),
-                  e('h1', { className: 'text-center text-3xl font-bold text-slate-800' }, 'Compliance Cloud'),
-                  e('div', { className: 'mt-8 bg-white p-8 rounded-xl shadow-md border border-slate-200' },
+                  e('h1', { className: 'text-center text-3xl font-bold text-slate-800 dark:text-slate-100' }, 'Compliance Cloud'),
+                  e('div', { className: 'mt-8 bg-white dark:bg-slate-800 p-8 rounded-xl shadow-md border border-slate-200 dark:border-slate-700' },
                       e('form', { onSubmit: handleLogin, className: 'space-y-6' },
                           e('div', null,
-                              e('label', { htmlFor: 'username', className: 'block text-sm font-medium text-slate-700' }, 'Username'),
+                              e('label', { htmlFor: 'username', className: 'block text-sm font-medium text-slate-700 dark:text-slate-300' }, 'Username'),
                               e('div', { className: 'mt-1' },
                                   e(TextInput, { id: 'username', type: 'text', required: true, value: username, onChange: function(ev) { setUsername(ev.target.value) } })
                               )
                           ),
                           e('div', null,
-                              e('label', { htmlFor: 'password', className: 'block text-sm font-medium text-slate-700' }, 'Password'),
+                              e('label', { htmlFor: 'password', className: 'block text-sm font-medium text-slate-700 dark:text-slate-300' }, 'Password'),
                               e('div', { className: 'mt-1' },
                                   e(TextInput, { id: 'password', type: 'password', required: true, value: password, onChange: function(ev) { setPassword(ev.target.value) } })
                               )
@@ -806,10 +891,10 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
               }
           ];
 
-          return e('div', { className: 'min-h-screen bg-gradient-to-br from-indigo-50 to-white p-6 sm:p-8' },
+          return e('div', { className: 'min-h-screen bg-gradient-to-br from-indigo-50 to-white dark:from-slate-900 dark:to-slate-800 p-6 sm:p-8' },
               e('div', { className: 'max-w-screen-xl mx-auto' },
-                  e('h1', { className: 'text-3xl font-bold text-slate-800' }, 'Welcome, Harish'),
-                  e('h2', { className: 'mt-2 text-xl text-slate-600' }, 'Clear Compliance Cloud'),
+                  e('h1', { className: 'text-3xl font-bold text-slate-800 dark:text-slate-100' }, 'Welcome, Harish'),
+                  e('h2', { className: 'mt-2 text-xl text-slate-600 dark:text-slate-400' }, 'Clear Compliance Cloud'),
                   e('div', { className: 'mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' },
                       cards.map(function(card) { return e(ProductCard, { key: card.title, ...card }) })
                   )
@@ -834,15 +919,15 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
             React.createElement(Button, { onClick: onNavigateToHome, variant: 'secondary', icon: React.createElement(Icons.HomeIcon, { className: 'h-5 w-5' }) }, 'Home')
           ),
           React.createElement('div', { className: 'w-full max-w-md text-center' },
-            React.createElement('div', { className: 'mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary-light mb-5' },
+            React.createElement('div', { className: 'mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary-light dark:bg-primary/20 mb-5' },
               React.createElement(Icons.ReceiptIcon, { className: 'h-8 w-8 text-primary' })
             ),
-            React.createElement('h1', { className: 'text-3xl font-bold text-slate-800' }, 'GST Reconciliation Dashboard'),
-            React.createElement('p', { className: 'mt-2 text-slate-600' }, 'Upload an Excel file or load previously saved data to begin.'),
-            React.createElement('div', { className: 'mt-8 bg-white p-8 rounded-xl shadow-md border border-slate-200' },
+            React.createElement('h1', { className: 'text-3xl font-bold text-slate-800 dark:text-slate-100' }, 'GST Reconciliation Dashboard'),
+            React.createElement('p', { className: 'mt-2 text-slate-600 dark:text-slate-400' }, 'Upload an Excel file or load previously saved data to begin.'),
+            React.createElement('div', { className: 'mt-8 bg-white dark:bg-slate-800 p-8 rounded-xl shadow-md border border-slate-200 dark:border-slate-700' },
               isLoading ? 
                 React.createElement('div', { className: 'space-y-4 py-8' },
-                  React.createElement('p', { className: 'text-center text-slate-600 font-medium' }, statusMessage),
+                  React.createElement('p', { className: 'text-center text-slate-600 dark:text-slate-300 font-medium' }, statusMessage),
                   React.createElement(ProgressBar, { progress: progress })
                 ) :
                 React.createElement(Fragment, null,
@@ -852,24 +937,24 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
                     React.createElement(Button, { onClick: onLoadSaved, variant: 'secondary', icon: React.createElement(Icons.DatabaseIcon, { className: 'h-5 w-5' }), className: 'w-full justify-center text-base py-3' }, 'Use Saved Data'),
                     React.createElement(Button, { onClick: onLoadMockData, variant: 'secondary', className: 'w-full justify-center text-base py-3' }, 'Load Mock Data')
                   ),
-                  React.createElement('div', { className: 'mt-6 border-t pt-6' },
+                  React.createElement('div', { className: 'mt-6 border-t dark:border-slate-600 pt-6' },
                     React.createElement(Button, { onClick: onClearSaved, variant: 'danger-ghost', icon: React.createElement(Icons.TrashIcon, { className: 'w-4 h-4' }) }, 'Clear All Saved Data')
                   )
                 )
             ),
-            !isLoading && statusMessage && React.createElement('p', { className: 'mt-6 text-sm text-center text-slate-600 h-5' }, statusMessage)
+            !isLoading && statusMessage && React.createElement('p', { className: 'mt-6 text-sm text-center text-slate-600 dark:text-slate-400 h-5' }, statusMessage)
           )
         );
       };
       
       const TextInput = function(props) {
-          return e('input', { ...props, className: `w-full rounded-md border-slate-300 shadow-sm text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary ${props.className || ''}` });
+          return e('input', { ...props, className: `w-full rounded-md border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 shadow-sm text-sm text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-1 focus:ring-primary ${props.className || ''}` });
       };
       
-      const Checkbox = function({ id, checked, onChange, label }) {
+      const Checkbox = function({ id, checked, onChange, label, ...props }) {
           return e('div', { className: 'flex items-center' },
-              e('input', { id, type: 'checkbox', checked, onChange, className: 'h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary' }),
-              e('label', { htmlFor: id, className: 'ml-2 block text-sm text-slate-900' }, label)
+              e('input', { id, type: 'checkbox', checked, onChange, className: 'h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-primary focus:ring-primary bg-transparent dark:bg-slate-700', ...props }),
+              label && e('label', { htmlFor: id, className: 'ml-2 block text-sm text-slate-900 dark:text-slate-200' }, label)
           );
       };
 
@@ -893,13 +978,13 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
         const renderOptions = ['All', ...options];
         
         return React.createElement('div', { className: `relative ${className}`, ref: wrapperRef },
-          label && React.createElement('label', { className: 'block text-xs font-medium text-slate-500 mb-1' }, label),
-          React.createElement('button', { type: 'button', onClick: function() { setIsOpen(!isOpen) }, className: 'relative w-full bg-white border border-slate-300 rounded-md shadow-sm pl-3 pr-10 py-2 text-left cursor-default focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary sm:text-sm text-slate-900' },
+          label && React.createElement('label', { className: 'block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1' }, label),
+          React.createElement('button', { type: 'button', onClick: function() { setIsOpen(!isOpen) }, className: 'relative w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm pl-3 pr-10 py-2 text-left cursor-default focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary sm:text-sm text-slate-900 dark:text-slate-200' },
             React.createElement('span', { className: 'block truncate' }, selectedOption),
             React.createElement('span', { className: 'absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none' }, React.createElement(Icons.ChevronUpDownIconCompact, { className: 'h-5 w-5 text-gray-400' }))
           ),
-          isOpen && React.createElement('div', { className: 'absolute z-30 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm' },
-            renderOptions.map(function(option) { return React.createElement('div', { key: option, onClick: function() { handleSelect(option) }, className: 'cursor-default select-none relative py-2 pl-3 pr-9 text-gray-900 hover:bg-primary-light hover:text-primary-dark' },
+          isOpen && React.createElement('div', { className: 'absolute z-30 mt-1 w-full bg-white dark:bg-slate-800 shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm' },
+            renderOptions.map(function(option) { return React.createElement('div', { key: option, onClick: function() { handleSelect(option) }, className: 'cursor-default select-none relative py-2 pl-3 pr-9 text-gray-900 dark:text-gray-200 hover:bg-primary-light dark:hover:bg-slate-700 hover:text-primary-dark dark:hover:text-primary' },
               React.createElement('span', { className: `font-normal block truncate ${value === option ? 'font-semibold' : ''}` }, option)
             )})
           )
@@ -937,22 +1022,22 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
                              `${values.length} selected`;
 
         return e('div', { className: `relative ${className}`, ref: wrapperRef },
-          label && e('label', { className: 'block text-xs font-medium text-slate-500 mb-1' }, label),
-          e('button', { type: 'button', onClick: function() { setIsOpen(!isOpen) }, className: 'relative w-full bg-white border border-slate-300 rounded-md shadow-sm pl-3 pr-10 py-2 text-left cursor-default focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary sm:text-sm text-slate-900' },
+          label && e('label', { className: 'block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1' }, label),
+          e('button', { type: 'button', onClick: function() { setIsOpen(!isOpen) }, className: 'relative w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm pl-3 pr-10 py-2 text-left cursor-default focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary sm:text-sm text-slate-900 dark:text-slate-200' },
             e('span', { className: 'block truncate' }, displayValue),
             e('span', { className: 'absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none' }, e(Icons.ChevronUpDownIconCompact, { className: 'h-5 w-5 text-gray-400' }))
           ),
-          isOpen && e('div', { className: 'absolute z-30 mt-1 w-full bg-white shadow-lg max-h-80 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm flex flex-col' },
-            e('div', { className: 'p-2 border-b' }, 
+          isOpen && e('div', { className: 'absolute z-30 mt-1 w-full bg-white dark:bg-slate-800 shadow-lg max-h-80 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm flex flex-col' },
+            e('div', { className: 'p-2 border-b dark:border-slate-700' }, 
                 e(TextInput, { placeholder: `Search...`, value: searchTerm, onChange: function(e) { setSearchTerm(e.target.value) }, className: 'w-full' })
             ),
             e('div', { className: 'flex-grow overflow-y-auto' },
-                filteredOptions.map(function(option) { return e('div', { key: option, onClick: function() { handleToggleOption(option) }, className: 'cursor-pointer select-none relative py-2 pl-3 pr-9 text-gray-900 hover:bg-primary-light flex items-center' },
-                    e('input', { type: 'checkbox', readOnly: true, checked: values.includes(option), className: 'h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary mr-3' }),
+                filteredOptions.map(function(option) { return e('div', { key: option, onClick: function() { handleToggleOption(option) }, className: 'cursor-pointer select-none relative py-2 pl-3 pr-9 text-gray-900 dark:text-gray-200 hover:bg-primary-light dark:hover:bg-slate-700 flex items-center' },
+                    e('input', { type: 'checkbox', readOnly: true, checked: values.includes(option), className: 'h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-primary focus:ring-primary mr-3' }),
                     e('span', { className: 'font-normal block truncate' }, option)
                 )})
             ),
-            e('div', { className: 'flex justify-between p-2 border-t' },
+            e('div', { className: 'flex justify-between p-2 border-t dark:border-slate-700' },
                 e('button', { onClick: function() { onChange(options) }, className: 'text-sm text-primary hover:underline' }, "Select All"),
                 e('button', { onClick: function() { onChange([]) }, className: 'text-sm text-primary hover:underline' }, "Clear All"),
             )
@@ -1017,17 +1102,17 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
               return React.createElement(Button, { onClick: function() { setIsOpen(true) }, className: 'fixed bottom-5 right-5 rounded-full p-4 shadow-lg z-30', icon: React.createElement(Icons.ChatBubbleIcon, { className: 'h-6 w-6' }) });
           }
 
-          return React.createElement('div', { className: 'fixed bottom-5 right-5 w-[350px] h-[500px] bg-white rounded-lg shadow-2xl z-40 flex flex-col' },
-              React.createElement('div', { className: 'p-4 border-b flex justify-between items-center' },
-                  React.createElement('h3', { className: 'font-semibold text-lg' }, 'MGST AI Assistant'),
-                  React.createElement('button', { onClick: function() { setIsOpen(false) }, className: 'text-2xl text-slate-500 hover:text-slate-800' }, '×')
+          return e('div', { className: 'fixed bottom-5 right-5 w-[350px] h-[500px] bg-white dark:bg-slate-800 rounded-lg shadow-2xl z-40 flex flex-col border border-slate-200 dark:border-slate-700' },
+              e('div', { className: 'p-4 border-b dark:border-slate-700 flex justify-between items-center' },
+                  e('h3', { className: 'font-semibold text-lg dark:text-slate-100' }, 'MGST AI Assistant'),
+                  e('button', { onClick: function() { setIsOpen(false) }, className: 'text-2xl text-slate-500 hover:text-slate-800 dark:hover:text-slate-200' }, '×')
               ),
-              React.createElement('div', { ref: messagesEndRef, className: 'flex-grow p-4 overflow-y-auto' },
-                  messages.map(function(msg, i) { return React.createElement('div', { key: i, className: `mb-3 max-w-[85%] p-3 rounded-lg ${msg.sender === 'user' ? 'ml-auto bg-primary text-white' : 'mr-auto bg-slate-200'}` }, msg.text) })
+              e('div', { ref: messagesEndRef, className: 'flex-grow p-4 overflow-y-auto' },
+                  messages.map(function(msg, i) { return e('div', { key: i, className: `mb-3 max-w-[85%] p-3 rounded-lg ${msg.sender === 'user' ? 'ml-auto bg-primary text-white' : 'mr-auto bg-slate-200 dark:bg-slate-700 dark:text-slate-200'}` }, msg.text) })
               ),
-              React.createElement('div', { className: 'p-4 border-t flex' },
-                  React.createElement(TextInput, { value: input, onChange: function(e) { setInput(e.target.value) }, onKeyDown: function(e) { return e.key === 'Enter' && handleSend() }, placeholder: "Ask about the data..." }),
-                  React.createElement(Button, { onClick: handleSend, className: 'ml-2' }, 'Send')
+              e('div', { className: 'p-4 border-t dark:border-slate-700 flex' },
+                  e(TextInput, { value: input, onChange: function(e) { setInput(e.target.value) }, onKeyDown: function(e) { return e.key === 'Enter' && handleSend() }, placeholder: "Ask about the data..." }),
+                  e(Button, { onClick: handleSend, className: 'ml-2' }, 'Send')
               )
           );
       };
@@ -1073,33 +1158,33 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
           const handleSelectAll = function() { onFilterChange(uniqueValues) };
           const handleClearAll = function() { onFilterChange([]) };
 
-          return e('div', { ref: menuRef, className: 'absolute top-full mt-2 left-0 z-40 bg-white shadow-lg max-h-80 w-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm flex flex-col' },
-            e('div', { className: 'p-2 border-b' },
+          return e('div', { ref: menuRef, className: 'absolute top-full mt-2 left-0 z-40 bg-white dark:bg-slate-800 shadow-lg max-h-80 w-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm flex flex-col' },
+            e('div', { className: 'p-2 border-b dark:border-slate-700' },
                 e(TextInput, { placeholder: `Search...`, value: searchTerm, onChange: function(e) { setSearchTerm(e.target.value) } })
             ),
             e('div', { className: 'flex-grow overflow-y-auto' },
-                filteredValues.map(function(value) { return e('div', { key: value, onClick: function() { handleToggle(value) }, className: 'cursor-pointer select-none relative py-2 pl-3 pr-9 text-gray-900 hover:bg-primary-light flex items-center' },
+                filteredValues.map(function(value) { return e('div', { key: value, onClick: function() { handleToggle(value) }, className: 'cursor-pointer select-none relative py-2 pl-3 pr-9 text-gray-900 dark:text-gray-200 hover:bg-primary-light dark:hover:bg-slate-700 flex items-center' },
                     e('input', { type: 'checkbox', readOnly: true, checked: currentFilters.includes(value), className: 'h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary mr-3' }),
                     e('span', { className: 'font-normal block truncate' }, value)
                 )})
             ),
-            e('div', { className: 'flex justify-between p-2 border-t' },
+            e('div', { className: 'flex justify-between p-2 border-t dark:border-slate-700' },
                 e('button', { onClick: handleSelectAll, className: 'text-sm text-primary hover:underline' }, "Select All"),
                 e('button', { onClick: handleClearAll, className: 'text-sm text-primary hover:underline' }, "Clear All"),
             )
           );
       };
       
-      const DataTable = function({ columns, data, initialPageSize = 10, onActionChange, onAssignmentChange }) {
-          const [sortConfig, setSortConfig] = useState({ key: columns[0]?.key || '', direction: 'ascending' });
+      const DataTable = function({ columns, data, initialPageSize = 10, selectedRows, onSelectionChange }) {
+          const [sortConfig, setSortConfig] = useState({ key: columns.find(c => c.sortable)?.key || '', direction: 'ascending' });
           const [currentPage, setCurrentPage] = useState(1);
           const [rowsPerPage, setRowsPerPage] = useState(initialPageSize);
           const [globalFilter, setGlobalFilter] = useState('');
-          const [editingCell, setEditingCell] = useState(null);
-          const [remarkValue, setRemarkValue] = useState('');
           const [columnFilters, setColumnFilters] = useState({});
-          const [openFilter, setOpenFilter] = useState(null); // Key of the column filter that is open
+          const [openFilter, setOpenFilter] = useState(null);
           const filterMenuRef = useRef(null);
+          
+          const finalSelectedRows = selectedRows || [];
 
           useEffect(function() {
               const handleClickOutside = function(event) {
@@ -1153,6 +1238,8 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
               const start = (currentPage - 1) * rowsPerPage;
               return filteredAndSortedData.slice(start, start + rowsPerPage);
           }, [filteredAndSortedData, currentPage, rowsPerPage]);
+          
+          const paginatedDataIds = useMemo(() => paginatedData.map(d => d.id), [paginatedData]);
 
           const totalPages = Math.ceil(filteredAndSortedData.length / rowsPerPage);
 
@@ -1172,8 +1259,24 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
           const handleColumnFilterChange = function(columnKey, values) {
               setColumnFilters(function(prev) { return {...prev, [columnKey]: values}});
           };
+          
+          const handleSelectAllOnPage = (e) => {
+              const isChecked = e.target.checked;
+              const currentIds = new Set(finalSelectedRows);
+              paginatedDataIds.forEach(id => {
+                  if (isChecked) {
+                      currentIds.add(id);
+                  } else {
+                      currentIds.delete(id);
+                  }
+              });
+              onSelectionChange(Array.from(currentIds));
+          };
+          
+          const isAllOnPageSelected = onSelectionChange && paginatedData.length > 0 && paginatedDataIds.every(id => finalSelectedRows.includes(id));
 
-          return e('div', { className: 'bg-white p-4 rounded-lg shadow-md border border-slate-200 min-h-[400px] flex flex-col' },
+
+          return e('div', { className: 'bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md border border-slate-200 dark:border-slate-700 min-h-[400px] flex flex-col' },
               e('div', { className: 'mb-4' }, 
                   e(TextInput, { 
                       placeholder: 'Search all columns...', 
@@ -1183,16 +1286,17 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
               ),
               e('div', { className: 'overflow-x-auto flex-grow' },
                   e('table', { className: 'w-full text-sm' },
-                      e('thead', { className: 'text-xs text-slate-700 uppercase bg-slate-50' },
+                      e('thead', { className: 'text-xs text-slate-700 dark:text-slate-300 uppercase bg-slate-50 dark:bg-slate-700/50' },
                           e('tr', null,
-                              columns.map(function(col) { return e('th', { key: col.header, className: `px-4 py-3 text-black`, onClick: function() { col.sortable && requestSort(col.key) } }, 
+                              onSelectionChange && e('th', { className: 'px-4 py-3' }, e(Checkbox, { checked: isAllOnPageSelected, onChange: handleSelectAllOnPage })),
+                              columns.map(function(col) { return e('th', { key: col.header, className: `px-4 py-3 text-black dark:text-white`, onClick: function() { col.sortable && requestSort(col.key) } }, 
                                   e('div', { className: 'flex items-center justify-between' },
                                       e('div', { className: `flex items-center ${col.sortable ? 'cursor-pointer' : ''}` }, 
                                           col.header,
                                           col.sortable && sortConfig.key === col.key && (sortConfig.direction === 'ascending' ? e(Icons.ArrowUpIcon, { className: 'w-3 h-3 ml-1' }) : e(Icons.ArrowDownIcon, { className: 'w-3 h-3 ml-1' }))
                                       ),
                                       col.filterable && e('div', { className: 'relative' },
-                                          e('button', { onClick: function(e) { e.stopPropagation(); setOpenFilter(openFilter === col.key ? null : col.key) }, className: 'p-1 rounded hover:bg-slate-200' },
+                                          e('button', { onClick: function(e) { e.stopPropagation(); setOpenFilter(openFilter === col.key ? null : col.key) }, className: 'p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-600' },
                                               e(Icons.FunnelIcon, { className: `w-4 h-4 ${columnFilters[col.key]?.length > 0 ? 'text-primary' : 'text-slate-400'}` })
                                           ),
                                           e('div', { ref: openFilter === col.key ? filterMenuRef : null },
@@ -1210,19 +1314,23 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
                           )
                       ),
                       e('tbody', null,
-                          paginatedData.map(function(row, index) { return e('tr', { key: row.id || index, className: 'bg-white border-b border-slate-400 hover:bg-slate-50' },
+                          paginatedData.map(function(row, index) { return e('tr', { key: row.id || index, className: 'bg-white dark:bg-slate-800 border-b border-slate-400 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50' },
+                              onSelectionChange && e('td', { className: 'px-4 py-2' }, e(Checkbox, { checked: finalSelectedRows.includes(row.id), onChange: () => {
+                                  const newSelection = finalSelectedRows.includes(row.id) ? finalSelectedRows.filter(id => id !== row.id) : [...finalSelectedRows, row.id];
+                                  onSelectionChange(newSelection);
+                              }})),
                               columns.map(function(col) {
-                                  const value = col.render ? col.render(row, onActionChange, onAssignmentChange) : row[col.key];
-                                  return e('td', { key: col.key, className: 'px-4 py-2 text-black align-top' }, value);
+                                  const value = col.render ? col.render(row) : row[col.key];
+                                  return e('td', { key: col.key, className: 'px-4 py-2 text-black dark:text-slate-200 align-top' }, value);
                               })
                           )})
                       )
                   )
               ),
-              e('div', { className: 'flex flex-col sm:flex-row justify-between items-center pt-4 text-sm text-slate-600' },
+              e('div', { className: 'flex flex-col sm:flex-row justify-between items-center pt-4 text-sm text-slate-600 dark:text-slate-400' },
                   e('div', { className: 'flex items-center gap-2 mb-2 sm:mb-0' },
                       e('span', null, 'Rows per page:'),
-                      e('select', { value: rowsPerPage, onChange: function(e) { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }, className: 'p-1 border-slate-300 rounded-md' },
+                      e('select', { value: rowsPerPage, onChange: function(e) { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }, className: 'p-1 border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800' },
                           [10, 25, 50, 100].map(function(size) { return e('option', { key: size, value: size }, size) })
                       )
                   ),
@@ -1241,6 +1349,7 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
           const fileInputRef = React.useRef(null);
           
           const validationResults = React.useMemo(function() {
+              if (validationBooks.length === 0) return { matched: [], unmatched: [] };
               const allBookRows = validationBooks.flatMap(function(book) {
                   return book.data.map(function(row) {
                       return {...row, 'Company Name': book.companyName}
@@ -1249,7 +1358,7 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
               
               const mainDataLookup = new Map();
               allData.forEach(function(row) {
-                  if (row.Type.startsWith('Missing_in_PR')) {
+                  if (row && typeof row.Type === 'string' && row.Type.startsWith('Missing_in_PR')) {
                       const key = `${row['Company Name']}|${row['Document Number (2B)']}|${row['Supplier GSTIN (2B)'] || ''}`;
                       mainDataLookup.set(key, row);
                   }
@@ -1301,9 +1410,9 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
           ];
           
           return e('div', { className: 'space-y-6' },
-              e('div', { className: 'bg-white p-4 rounded-lg shadow-md border' },
-                  e('h2', { className: 'text-lg font-semibold' }, "Upload Books File"),
-                  e('p', { className: 'text-sm text-slate-600 mt-1 mb-4' }, "Filename must be 'Books_CompanyName.xlsx'. This will find matches and auto-mark them as 'Accounted'."),
+              e('div', { className: 'bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md border dark:border-slate-700' },
+                  e('h2', { className: 'text-lg font-semibold dark:text-slate-100' }, "Upload Books File"),
+                  e('p', { className: 'text-sm text-slate-600 dark:text-slate-400 mt-1 mb-4' }, "Filename must be 'Books_CompanyName.xlsx'. This will find matches and auto-mark them as 'Accounted'."),
                   e('input', { type: 'file', ref: fileInputRef, className: 'hidden', onChange: function(e) { return e.target.files[0] && onValidateWithBooks(e.target.files[0]) } }),
                   e(Button, { onClick: function() { return fileInputRef.current.click() } }, "Upload 'Books' Excel File")
               ),
@@ -1320,10 +1429,12 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
           );
       };
 
-      const TransactionsPage = function({ data, actionState, updateAction }) {
+      const TransactionsPage = function({ data, actionState, updateAction, updateMultipleActions }) {
           const [jtcFilter, setJtcFilter] = useState(false);
           const [editingCell, setEditingCell] = useState(null);
           const [remarkValue, setRemarkValue] = useState('');
+          const [selectedRows, setSelectedRows] = useState([]);
+          const [bulkAction, setBulkAction] = useState('None');
 
           const tableData = useMemo(function() {
               if (!jtcFilter) return data;
@@ -1332,6 +1443,10 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
                   return (typeof action === 'string' && action === 'Accounted') || (action?.action === 'Accounted');
               });
           }, [data, jtcFilter, actionState]);
+          
+          useEffect(() => {
+              setSelectedRows([]);
+          }, [data]);
 
           const handleRemarkEdit = function(rowId, currentRemark) {
               setEditingCell(rowId);
@@ -1349,6 +1464,12 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
           const handleRemarkKeyDown = function(e, rowId) {
               if (e.key === 'Enter') handleRemarkSave(rowId);
               if (e.key === 'Escape') setEditingCell(null);
+          };
+
+          const handleApplyBulkAction = () => {
+              if (bulkAction === 'None' || selectedRows.length === 0) return;
+              updateMultipleActions(selectedRows, bulkAction);
+              setSelectedRows([]);
           };
 
           const columns = [
@@ -1373,24 +1494,35 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
                   }
                   return e('span', { onClick: function() { handleRemarkEdit(row.id, currentRemark) }, className: 'cursor-pointer hover:underline' }, currentRemark || '...');
               }},
-              { header: 'Action', key: 'Action', render: function(row, onActionChange) {
+              { header: 'Action', key: 'Action', render: function(row) {
                   const currentAction = actionState[row.id];
                   const value = typeof currentAction === 'string' ? currentAction : currentAction?.action;
                   const handleChange = function(id, val) {
                       const newAction = typeof currentAction === 'object' ? { ...currentAction } : {};
                       newAction.action = val;
-                      onActionChange(id, newAction);
+                      updateAction(id, newAction);
                   };
                   return e(ActionSelect, { rowId: row.id, value: value || 'None', onChange: handleChange });
               }}
           ];
+          
+          const BulkActionBar = () => {
+              if (selectedRows.length === 0) return null;
+              return e('div', { className: 'bg-primary-light dark:bg-slate-700 p-2 rounded-md mb-4 flex items-center gap-4' },
+                  e('span', { className: 'text-sm font-medium dark:text-slate-200' }, `${selectedRows.length} rows selected`),
+                  e(Select, { value: bulkAction, options: ACTION_OPTIONS, onChange: (e) => setBulkAction(e.target.value), className: 'w-48' }),
+                  e(Button, { onClick: handleApplyBulkAction, disabled: bulkAction === 'None' }, 'Apply'),
+                  e('button', { onClick: () => setSelectedRows([]), className: 'text-sm text-slate-500 dark:text-slate-400 hover:underline ml-auto' }, 'Clear Selection')
+              );
+          };
 
           return e('div', null,
               e('div', { className: 'mb-4 flex flex-col sm:flex-row justify-between items-center gap-4' },
                   e(Checkbox, { id: 'jtcFilter', checked: jtcFilter, onChange: function(e) { setJtcFilter(e.target.checked) }, label: 'Show Accounted Only' }),
                   e(Button, { onClick: function() { exportToCsv(tableData, 'Transactions') }, variant: 'secondary' }, 'Export CSV')
               ),
-              e(DataTable, { columns, data: tableData, onActionChange: updateAction })
+              e(BulkActionBar, null),
+              e(DataTable, { columns, data: tableData, onSelectionChange: setSelectedRows, selectedRows })
           );
       };
       
@@ -1405,13 +1537,16 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
       const SuppliersPage = function({ data, assignmentState, updateAssignment }) {
         const supplierData = useMemo(function() {
           const suppliersInView = {};
-          data.forEach(function(row) {
-            const key = `${row['Company Name']}|${row['Supplier Name']}`;
-            if (!suppliersInView[key]) {
-              suppliersInView[key] = { id: key, company: row['Company Name'], name: row['Supplier Name'], totalGst: 0, transactionCount: 0 };
-            }
-            suppliersInView[key].totalGst += row['Total GST'];
-            suppliersInView[key].transactionCount++;
+          
+          const cleanData = data.filter(row => row && typeof row === 'object' && typeof row['Company Name'] === 'string' && typeof row['Supplier Name'] === 'string');
+
+          cleanData.forEach(function(row) {
+              const key = `${row['Company Name']}|${row['Supplier Name']}`;
+              if (!suppliersInView[key]) {
+                suppliersInView[key] = { id: key, company: row['Company Name'], name: row['Supplier Name'], totalGst: 0, transactionCount: 0 };
+              }
+              suppliersInView[key].totalGst += (row['Total GST'] || 0);
+              suppliersInView[key].transactionCount++;
           });
           
           Object.keys(assignmentState).forEach(function(key) {
@@ -1429,12 +1564,12 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
             { header: 'Supplier Name', key: 'name', sortable: true, filterable: true },
             { header: 'Total GST', key: 'totalGst', sortable: true, render: function(row) { return formatCurrency(row.totalGst, false) } },
             { header: 'Transactions', key: 'transactionCount', sortable: true },
-            { header: 'Add to List', key: 'list', render: function(row, _onAction, onAssignment) {
+            { header: 'Add to List', key: 'list', render: function(row) {
                 return e(AddToListSelect, { 
                     supplier: row.name, 
                     company: row.company, 
                     value: assignmentState[row.id] || 'None', 
-                    onChange: onAssignment 
+                    onChange: updateAssignment 
                 });
             }},
         ];
@@ -1443,7 +1578,7 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
           e('div', { className: 'mb-4 flex justify-end' },
             e(Button, { onClick: function() { exportToCsv(supplierData, "supplier_summary_export") }, variant: 'secondary' }, 'Export CSV')
           ),
-          e(DataTable, { columns: columns, data: supplierData, onAssignmentChange: updateAssignment })
+          e(DataTable, { columns: columns, data: supplierData })
         );
       };
 
@@ -1475,8 +1610,8 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
               setPrintModalData({ isOpen: true, category, data: mailingData });
           };
 
-          return e('div', { className: 'bg-white p-6 rounded-lg shadow-md border' },
-              e('h2', { className: 'text-lg font-semibold mb-4' }, 'Select a Category to View / Export:'),
+          return e('div', { className: 'bg-white dark:bg-slate-800 p-6 rounded-lg shadow-md border dark:border-slate-700' },
+              e('h2', { className: 'text-lg font-semibold mb-4 dark:text-slate-100' }, 'Select a Category to View / Export:'),
               e('div', { className: 'flex flex-wrap gap-3' },
                   MAILING_LIST_CATEGORIES.map(function(cat) { return e(Button, { key: cat, onClick: function() { return handleShowPreview(cat) } }, cat)})
               )
@@ -1508,30 +1643,30 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
           };
 
           return e('div', { id: 'print-modal', className: 'fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4' },
-              e('div', { id: 'print-modal-content', className: 'bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] flex flex-col' },
-                  e('div', { id: 'print-modal-header', className: 'p-4 border-b flex justify-between items-center' },
-                      e('h2', { className: 'text-xl font-bold' }, `Preview: ${printModalData.category}`),
-                      e('button', { onClick: function() { return setPrintModalData({isOpen: false, category: '', data: []}) }, className: 'text-2xl' }, '×')
+              e('div', { id: 'print-modal-content', className: 'bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] flex flex-col' },
+                  e('div', { id: 'print-modal-header', className: 'p-4 border-b dark:border-slate-700 flex justify-between items-center' },
+                      e('h2', { className: 'text-xl font-bold dark:text-slate-100' }, `Preview: ${printModalData.category}`),
+                      e('button', { onClick: function() { return setPrintModalData({isOpen: false, category: '', data: []}) }, className: 'text-2xl dark:text-slate-300' }, '×')
                   ),
                   e('div', { className: 'p-4 overflow-auto flex-grow' },
                       e('table', { id: 'print-table', className: 'w-full text-sm' },
-                          e('thead', null, e('tr', null, ['Company', 'Supplier', 'Doc Num', 'Doc Date', 'Tag', 'Taxable', 'Total GST', 'Remarks', 'Action'].map(function(h) { return e('th', { key: h, className: 'p-2 border border-slate-500 text-black text-left bg-slate-100' }, h) }))),
+                          e('thead', null, e('tr', null, ['Company', 'Supplier', 'Doc Num', 'Doc Date', 'Tag', 'Taxable', 'Total GST', 'Remarks', 'Action'].map(function(h) { return e('th', { key: h, className: 'p-2 border border-slate-500 text-black dark:text-slate-200 text-left bg-slate-100 dark:bg-slate-700' }, h) }))),
                           e('tbody', null, printModalData.data.map(function(row) {
                             const action = actionState[row.id];
                             return e('tr', { key: row.id },
-                              e('td', { className: 'p-2 border border-slate-500 text-black' }, row['Company Name']),
-                              e('td', { className: 'p-2 border border-slate-500 text-black' }, row['Supplier Name']),
-                              e('td', { className: 'p-2 border border-slate-500 text-black' }, row['Document Number (2B)']),
-                              e('td', { className: 'p-2 border border-slate-500 text-black' }, row['Document Date (2B)']),
-                              e('td', { className: 'p-2 border border-slate-500 text-black' }, row.Type),
-                              e('td', { className: 'p-2 border border-slate-500 text-black text-right' }, formatCurrency(row['Sum of Taxable Value (2B)'], false)),
-                              e('td', { className: 'p-2 border border-slate-500 text-black text-right' }, formatCurrency(row['Total GST'], false)),
-                              e('td', { className: 'p-2 border border-slate-500 text-black' }, (typeof action === 'object' ? action?.remarks : '') || row.Remarks),
-                              e('td', { className: 'p-2 border border-slate-500 text-black' }, (typeof action === 'string' ? action : action?.action) || 'None')
+                              e('td', { className: 'p-2 border border-slate-500 dark:border-slate-600 text-black dark:text-slate-300' }, row['Company Name']),
+                              e('td', { className: 'p-2 border border-slate-500 dark:border-slate-600 text-black dark:text-slate-300' }, row['Supplier Name']),
+                              e('td', { className: 'p-2 border border-slate-500 dark:border-slate-600 text-black dark:text-slate-300' }, row['Document Number (2B)']),
+                              e('td', { className: 'p-2 border border-slate-500 dark:border-slate-600 text-black dark:text-slate-300' }, row['Document Date (2B)']),
+                              e('td', { className: 'p-2 border border-slate-500 dark:border-slate-600 text-black dark:text-slate-300' }, row.Type),
+                              e('td', { className: 'p-2 border border-slate-500 dark:border-slate-600 text-black dark:text-slate-300 text-right' }, formatCurrency(row['Sum of Taxable Value (2B)'], false)),
+                              e('td', { className: 'p-2 border border-slate-500 dark:border-slate-600 text-black dark:text-slate-300 text-right' }, formatCurrency(row['Total GST'], false)),
+                              e('td', { className: 'p-2 border border-slate-500 dark:border-slate-600 text-black dark:text-slate-300' }, (typeof action === 'object' ? action?.remarks : '') || row.Remarks),
+                              e('td', { className: 'p-2 border border-slate-500 dark:border-slate-600 text-black dark:text-slate-300' }, (typeof action === 'string' ? action : action?.action) || 'None')
                           )}))
                       )
                   ),
-                  e('div', { id: 'print-modal-footer', className: 'p-4 border-t flex justify-end gap-3' },
+                  e('div', { id: 'print-modal-footer', className: 'p-4 border-t dark:border-slate-700 flex justify-end gap-3' },
                       e(Button, { onClick: handleExport, variant: 'secondary' }, 'Export CSV'),
                       e(Button, { onClick: handlePrint, icon: e(Icons.PrinterIcon, null) }, 'Print'),
                       e(Button, { onClick: function() { return setPrintModalData({isOpen: false, category: '', data: []}) }, variant: 'danger-ghost' }, 'Close')
@@ -1562,20 +1697,20 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
           };
 
           return e('div', { className: 'fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4' },
-              e('div', { className: 'bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col' },
-                  e('div', { className: 'p-4 border-b flex justify-between items-center' },
-                      e('h2', { className: 'text-xl font-bold' }, 'Analyze with AI (Thinking Mode)'),
-                      e('button', { onClick: onClose, className: 'text-2xl' }, '×')
+              e('div', { className: 'bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col' },
+                  e('div', { className: 'p-4 border-b dark:border-slate-700 flex justify-between items-center' },
+                      e('h2', { className: 'text-xl font-bold dark:text-slate-100' }, 'Analyze with AI (Thinking Mode)'),
+                      e('button', { onClick: onClose, className: 'text-2xl dark:text-slate-300' }, '×')
                   ),
                   e('div', { className: 'p-4 flex-grow flex flex-col gap-4' },
                       e('div', null,
-                          e('label', { htmlFor: 'ai-prompt', className: 'block text-sm font-medium text-slate-700 mb-1' }, 'Ask a complex question about the current data view:'),
+                          e('label', { htmlFor: 'ai-prompt', className: 'block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1' }, 'Ask a complex question about the current data view:'),
                           e('textarea', { 
                               id: 'ai-prompt',
                               rows: 4, 
                               value: prompt,
                               onChange: function(e) { setPrompt(e.target.value) },
-                              className: 'w-full rounded-md border-slate-300 shadow-sm text-sm focus:border-primary focus:ring-1 focus:ring-primary',
+                              className: 'w-full rounded-md border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 shadow-sm text-sm text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-1 focus:ring-primary',
                               placeholder: 'e.g., "What are the common trends for suppliers with missing GST in the last quarter?" or "Summarize the top 3 suppliers by missing GST and suggest an action plan."'
                           })
                       ),
@@ -1584,15 +1719,15 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
                               isLoading ? 'Analyzing...' : 'Submit to AI'
                           )
                       ),
-                      (isLoading || response) && e('div', { className: 'border-t pt-4 flex-grow overflow-y-auto' },
-                          isLoading ? e('div', { className: 'flex items-center gap-2 text-slate-600' }, 
+                      (isLoading || response) && e('div', { className: 'border-t dark:border-slate-700 pt-4 flex-grow overflow-y-auto' },
+                          isLoading ? e('div', { className: 'flex items-center gap-2 text-slate-600 dark:text-slate-300' }, 
                               e('div', { className: 'w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin' }),
                               e('span', null, 'The AI is thinking... this may take a moment.')
                           ) :
-                          e('pre', { className: 'bg-slate-50 p-3 rounded-md text-sm text-slate-800 whitespace-pre-wrap font-sans' }, response)
+                          e('pre', { className: 'bg-slate-50 dark:bg-slate-900/50 p-3 rounded-md text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap font-sans' }, response)
                       )
                   ),
-                  e('div', { className: 'p-4 border-t flex justify-end' },
+                  e('div', { className: 'p-4 border-t dark:border-slate-700 flex justify-end' },
                       e(Button, { onClick: onClose, variant: 'secondary' }, 'Close')
                   )
               )
@@ -1600,48 +1735,76 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
       };
 
       const Dashboard = function({
-        allData, slicerOptions, filters, setFilters, actionState, updateAction,
+        allData, slicerOptions, filters, setFilters, actionState, updateAction, updateMultipleActions,
         assignmentState, updateAssignment, clearAllData, onValidateWithBooks,
         validationBooks, activeTab, setActiveTab, onKpiClick, setPrintModalData,
-        onNavigateToHome
+        onNavigateToHome, theme, toggleTheme, savedViews, saveCurrentView, applyView, deleteView
       }) {
-          const [isThinkingModalOpen, setIsThinkingModalOpen] = useState(false);
           
           const filteredData = useMemo(function() {
               const { company, financialYear, month, tag } = filters;
               if (!allData) return [];
               return allData.filter(function(r) {
-                  return (company.length === 0 || company.includes(r['Company Name'])) &&
-                  (financialYear.length === 0 || financialYear.includes(r['Financial Year'])) &&
-                  (month.length === 0 || month.includes(r['Month'])) &&
-                  (tag.length === 0 || tag.includes(r['Type']))
+                  if (!r || typeof r !== 'object') {
+                      return false;
+                  }
+                  const companyMatch = company.length === 0 || company.includes(r['Company Name']);
+                  const fyMatch = financialYear.length === 0 || financialYear.includes(r['Financial Year']);
+                  const monthMatch = month.length === 0 || month.includes(r['Month']);
+                  const tagMatch = tag.length === 0 || (typeof r['Type'] === 'string' && tag.includes(r['Type']));
+                  
+                  return companyMatch && fyMatch && monthMatch && tagMatch;
               });
           }, [allData, filters]);
           
-          const handleSupplierChartClick = function(supplierName) {
-            const supplierData = filteredData.filter(function(row) {
-                const isMissing = (row.Type.includes('Missing_2B') || row.Type.includes('Missing_in_PR')) && !row.Type.includes('NowUploaded') && !row.Type.includes('NowClaimed');
-                return row['Supplier Name'] === supplierName && isMissing;
-            });
-            if (supplierData.length > 0) {
-                setPrintModalData({ isOpen: true, category: `Missing GST Details for ${supplierName}`, data: supplierData });
+          const handleChartDrillDown = function(category, data, alertMessage) {
+            if (data.length > 0) {
+                setPrintModalData({ isOpen: true, category, data });
             } else {
-                alert(`No missing GST transactions found for ${supplierName} within the current filter selection.`);
+                alert(alertMessage);
             }
           };
 
+          const handleSupplierChartClick = function(supplierName) {
+            const supplierData = filteredData.filter(function(row) {
+                if (!row || typeof row.Type !== 'string') return false;
+                const isMissing = (row.Type.includes('Missing_2B') || row.Type.includes('Missing_in_PR')) && !row.Type.includes('NowUploaded') && !row.Type.includes('NowClaimed');
+                return row['Supplier Name'] === supplierName && isMissing;
+            });
+            handleChartDrillDown(`Missing GST Details for ${supplierName}`, supplierData, `No missing GST transactions found for ${supplierName} within the current filter selection.`);
+          };
+          
+          const handleMonthlyChartClick = function(month) {
+            const monthData = filteredData.filter(function(row) {
+                return row && row.Month === month;
+            });
+            handleChartDrillDown(`All Transactions for ${month}`, monthData, `No transactions found for ${month} within the current filter selection.`);
+          };
+
+          const handleCategoryChartClick = function(category) {
+            const categoryData = filteredData.filter(function(row) {
+                return row && row.Type === category;
+            });
+            handleChartDrillDown(`Transactions for Tag: ${category}`, categoryData, `No transactions found for tag "${category}" within the current filter selection.`);
+          };
+
+
           const kpiData = useMemo(function() {
               const missing2bCum = filteredData.reduce(function(sum, r) {
+                  if (!r || typeof r.Type !== 'string') return sum;
                   return (r.Type === 'Missing_2B_Cumulative' || r.Type === 'Missing_2B_Current_Month') ? sum + r['Total GST'] : sum;
               }, 0);
               const missingPrCum = filteredData.reduce(function(sum, r) {
-                  return r.Type.startsWith('Missing_in_PR_') && !r.Type.includes('NowClaimed') ? sum + r['Total GST'] : sum;
+                  if (!r || typeof r.Type !== 'string') return sum;
+                  return (r.Type.startsWith('Missing_in_PR_') && !r.Type.includes('NowClaimed')) ? sum + r['Total GST'] : sum;
               }, 0);
               const missing2bClaimed = filteredData.reduce(function(sum, r) {
-                  return r.Type === 'Missing_2B_NowUploaded' ? sum + r['Total GST'] : sum;
+                  if (!r || typeof r.Type !== 'string') return sum;
+                  return (r.Type === 'Missing_2B_NowUploaded') ? sum + r['Total GST'] : sum;
               }, 0);
               const missingPrClaimed = filteredData.reduce(function(sum, r) {
-                  return r.Type.startsWith('Missing_in_PR_NowClaimed') || r.Type.startsWith('Missing_PR_NowClaimed') ? sum + r['Total GST'] : sum;
+                  if (!r || typeof r.Type !== 'string') return sum;
+                  return (r.Type.startsWith('Missing_in_PR_NowClaimed') || r.Type.startsWith('Missing_PR_NowClaimed')) ? sum + r['Total GST'] : sum;
               }, 0);
               const totalRecovered = missing2bClaimed + missingPrClaimed;
               const totalMissing = missing2bCum + missingPrCum;
@@ -1656,6 +1819,7 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
 
               const monthly = {};
               filteredData.forEach(function(r) {
+                  if (!r || typeof r.Type !== 'string') return;
                   const month = r.Month;
                   if (!monthly[month]) monthly[month] = { missing: 0, recovered: 0 };
                   if (r.Type.includes('Missing_2B') || r.Type.includes('Missing_in_PR')) {
@@ -1677,28 +1841,45 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
                           { label: 'Recovered GST', data: sortedMonths.map(function(m) { return monthly[m].recovered; }), backgroundColor: '#10B981' }
                       ]
                   },
-                  options: { responsive: true, plugins: { title: { display: true, text: 'Monthly Missing vs. Recovered GST' } }, scales: { x: { stacked: true }, y: { stacked: true, ticks: { callback: function(value) { return formatCurrency(value, true); } } } } }
+                  options: { responsive: true, plugins: { title: { display: true, text: 'Monthly Missing vs. Recovered GST' } }, scales: { x: { stacked: true }, y: { stacked: true, ticks: { callback: function(value) { return formatCurrency(value, true); } } } },
+                  onClick: (evt, elements) => {
+                      if (!elements.length) return;
+                      const index = elements[0].index;
+                      const month = sortedMonths[index];
+                      handleMonthlyChartClick(month);
+                  }
+                }
               };
               
               const byCategory = {};
               filteredData.forEach(function(r) {
+                  if (!r || typeof r.Type !== 'string') return;
                   if ((r.Type.includes('Missing_2B') || r.Type.includes('Missing_in_PR')) && !r.Type.includes('NowUploaded') && !r.Type.includes('NowClaimed')) {
                       const category = r.Type;
                       if (!byCategory[category]) byCategory[category] = 0;
                       byCategory[category] += r['Total GST'];
                   }
               });
+              const categoryLabels = Object.keys(byCategory);
               const categoryChartConfig = {
                   type: 'doughnut',
                   data: {
-                      labels: Object.keys(byCategory),
+                      labels: categoryLabels,
                       datasets: [{ data: Object.values(byCategory), backgroundColor: ['#EF4444', '#F59E0B', '#3B82F6', '#8B5CF6', '#EC4899'] }]
                   },
-                  options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Missing GST by Category' } } }
+                  options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Missing GST by Category' } },
+                  onClick: (evt, elements) => {
+                      if (!elements.length) return;
+                      const index = elements[0].index;
+                      const tag = categoryLabels[index];
+                      handleCategoryChartClick(tag);
+                  }
+                }
               };
 
               const bySupplier = {};
                filteredData.forEach(function(r) {
+                  if (!r || typeof r.Type !== 'string') return;
                   if ((r.Type.includes('Missing_2B') || r.Type.includes('Missing_in_PR')) && !r.Type.includes('NowUploaded') && !r.Type.includes('NowClaimed')) {
                       const supplier = r['Supplier Name'];
                       if (!bySupplier[supplier]) {
@@ -1735,88 +1916,125 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
               return { monthly: monthlyChartConfig, byCategory: categoryChartConfig, topSuppliers: topSuppliersChartConfig };
           }, [filteredData]);
           
-          const Header = function() { return React.createElement('header', { className: 'bg-white shadow-sm w-full p-3' },
+          const SavedViewsManager = () => {
+              const [isOpen, setIsOpen] = useState(false);
+              const wrapperRef = useRef(null);
+              useEffect(() => {
+                  const handleClickOutside = (event) => {
+                      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) setIsOpen(false);
+                  };
+                  document.addEventListener('mousedown', handleClickOutside);
+                  return () => document.removeEventListener('mousedown', handleClickOutside);
+              }, []);
+              
+              const handleSave = () => {
+                  const name = prompt("Enter a name for this view:");
+                  if (name) saveCurrentView(name);
+                  setIsOpen(false);
+              };
+
+              return e('div', { className: 'relative', ref: wrapperRef },
+                  e(Button, { onClick: () => setIsOpen(!isOpen), variant: 'secondary', icon: e(Icons.BookmarkIcon, { className: 'h-4 w-4' }) }, 'Views'),
+                  isOpen && e('div', { className: 'absolute z-30 mt-2 w-56 rounded-md shadow-lg bg-white dark:bg-slate-800 ring-1 ring-black ring-opacity-5 right-0' },
+                      e('div', { className: 'py-1', role: 'menu' },
+                          e('button', { onClick: handleSave, className: 'w-full text-left block px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700' }, 'Save current view...'),
+                          Object.keys(savedViews).length > 0 && e('div', { className: 'border-t border-slate-200 dark:border-slate-700 my-1' }),
+                          Object.keys(savedViews).map(name => 
+                              e('div', { key: name, className: 'flex justify-between items-center px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700' },
+                                  e('button', { onClick: () => { applyView(name); setIsOpen(false); }, className: 'flex-grow text-left' }, name),
+                                  e('button', { onClick: () => deleteView(name), className: 'text-slate-400 hover:text-danger ml-2' }, e(Icons.XMarkIcon, { className: 'h-4 w-4' }))
+                              )
+                          )
+                      )
+                  )
+              );
+          };
+          
+          const Header = function() { return React.createElement('header', { className: 'bg-white dark:bg-slate-800 shadow-sm w-full p-3' },
               React.createElement('div', { className: 'max-w-screen-2xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4' },
                   React.createElement('div', { className: 'flex items-center' },
-                      React.createElement('h1', { className: 'text-xl font-bold text-primary-dark shrink-0' }, 'GST Reconciliation Dashboard'),
-                      React.createElement(Button, { onClick: function() { onNavigateToHome() }, variant: 'ghost', className: 'ml-4', icon: React.createElement(Icons.HomeIcon, { className: 'h-5 w-5' }) }, 'Home')
+                      React.createElement('h1', { className: 'text-xl font-bold text-primary-dark dark:text-primary-light shrink-0' }, 'GST Reconciliation Dashboard')
                   ),
                   React.createElement('div', { className: 'flex flex-wrap justify-center md:justify-end gap-3 w-full items-center' },
                       React.createElement(MultiSelect, { label: 'Company', values: filters.company, options: slicerOptions.companies, onChange: function(v) { setFilters(function(f) { return {...f, company: v}}) }, className: 'w-40' }),
                       React.createElement(MultiSelect, { label: 'FY', values: filters.financialYear, options: slicerOptions.financialYears, onChange: function(v) { setFilters(function(f) { return {...f, financialYear: v}}) }, className: 'w-28' }),
                       React.createElement(MultiSelect, { label: 'Month', values: filters.month, options: slicerOptions.months, onChange: function(v) { setFilters(function(f) { return {...f, month: v}}) }, className: 'w-32' }),
                       React.createElement(MultiSelect, { label: 'Tag (Type)', values: filters.tag, options: slicerOptions.tags, onChange: function(v) { setFilters(function(f) { return {...f, tag: v}}) }, className: 'w-48' }),
-                      React.createElement(Button, { onClick: function() { setIsThinkingModalOpen(true) }, variant: 'secondary', icon: e(Icons.SparklesIcon, { className: 'h-4 w-4' }) }, 'Analyze with AI'),
+                      e(SavedViewsManager, null),
+                      e(Button, { onClick: toggleTheme, variant: 'ghost', className: 'p-2' }, theme === 'light' ? e(Icons.MoonIcon, { className: 'h-5 w-5' }) : e(Icons.SunIcon, { className: 'h-5 w-5' })),
+                      React.createElement(Button, { onClick: onNavigateToHome, variant: 'secondary', icon: e(Icons.HomeIcon, { className: 'h-5 w-5' }) }, 'Home'),
                       React.createElement(Button, { onClick: clearAllData, variant: 'danger-ghost', icon: React.createElement(Icons.TrashIcon, { className: 'w-4 h-4' }) }, 'Clear')
                   )
               )
           )};
           
           const tabs = ['KPIs', 'Transactions', 'Suppliers', 'Mailing List', 'Validate with Books'];
-          const Navigation = function() { return React.createElement('nav', { className: 'bg-white w-full shadow-sm border-b' },
+          const Navigation = function() { return React.createElement('nav', { className: 'bg-white dark:bg-slate-800 w-full shadow-sm border-b dark:border-slate-700' },
               React.createElement('div', { className: 'max-w-screen-2xl mx-auto flex justify-start px-2 text-sm' },
                   tabs.map(function(tab) { return React.createElement('button', {
                       key: tab,
                       onClick: function() { setActiveTab(tab) },
-                      className: `py-3 px-4 font-medium border-b-2 transition-colors ${activeTab === tab ? 'border-primary text-primary' : 'border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-800'}`
+                      className: `py-3 px-4 font-medium border-b-2 transition-colors ${activeTab === tab ? 'border-primary text-primary' : 'border-transparent text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`
                   }, tab)})
               )
           )};
           
           const KpiCard = function({ title, value, subValue, icon, color, onClick }) {
               const colorClasses = {
-                  red: 'text-red-600',
-                  yellow: 'text-yellow-600',
-                  blue: 'text-blue-600',
-                  green: 'text-green-600',
+                  red: 'text-red-600 dark:text-red-400',
+                  yellow: 'text-yellow-600 dark:text-yellow-400',
+                  blue: 'text-blue-600 dark:text-blue-400',
+                  green: 'text-green-600 dark:text-green-400',
               };
-              return React.createElement('div', { onClick, className: `bg-white p-4 rounded-lg shadow-md border border-slate-200 flex items-start ${onClick ? 'cursor-pointer hover:shadow-lg hover:border-primary' : ''}` },
-                  React.createElement('div', { className: 'p-3 rounded-full mr-4 bg-primary-light' }, icon),
+              return React.createElement('div', { onClick, className: `bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md border border-slate-200 dark:border-slate-700 flex items-start ${onClick ? 'cursor-pointer hover:shadow-lg hover:border-primary dark:hover:border-primary' : ''}` },
+                  React.createElement('div', { className: 'p-3 rounded-full mr-4 bg-primary-light dark:bg-primary/20' }, icon),
                   React.createElement('div', null,
-                      React.createElement('div', { className: 'text-sm font-medium text-slate-500' }, title),
+                      React.createElement('div', { className: 'text-sm font-medium text-slate-500 dark:text-slate-400' }, title),
                       React.createElement('div', { className: `text-2xl font-bold ${colorClasses[color]}` }, value),
-                      subValue && React.createElement('div', { className: 'text-xs text-slate-400' }, subValue)
+                      subValue && React.createElement('div', { className: 'text-xs text-slate-400 dark:text-slate-500' }, subValue)
                   )
               );
           };
           
           const KpiPage = function() { return React.createElement('div', { className: 'space-y-6' },
             React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6' },
-              React.createElement(KpiCard, { title: "Missing 2B Cum", value: formatCurrency(kpiData.missing2bCum), icon: React.createElement(Icons.DocumentMinusIcon, { className: "h-6 w-6 text-primary" }), color: 'red', onClick: function() { onKpiClick('Missing_2B_Cumulative') } }),
-              React.createElement(KpiCard, { title: "Missing PR Cum", value: formatCurrency(kpiData.missingPrCum), icon: React.createElement(Icons.DocumentMinusIcon, { className: "h-6 w-6 text-primary" }), color: 'yellow', onClick: function() { onKpiClick('Missing_in_PR_Cumulative') } }),
-              React.createElement(KpiCard, { title: "Missing 2B Claimed", value: formatCurrency(kpiData.missing2bClaimed), icon: React.createElement(Icons.CheckCircleIcon, { className: "h-6 w-6 text-primary" }), color: 'blue', onClick: function() { onKpiClick('Missing_2B_NowUploaded') } }),
+              React.createElement(KpiCard, { title: "Missing 2B Cum", value: formatCurrency(kpiData.missing2bCum), icon: React.createElement(Icons.DocumentMinusIcon, { className: "h-6 w-6 text-primary" }), color: 'red', onClick: function() { onKpiClick({tag: ['Missing_2B_Cumulative']}) } }),
+              React.createElement(KpiCard, { title: "Missing PR Cum", value: formatCurrency(kpiData.missingPrCum), icon: React.createElement(Icons.DocumentMinusIcon, { className: "h-6 w-6 text-primary" }), color: 'yellow', onClick: function() { onKpiClick({tag: ['Missing_in_PR_Cumulative']}) } }),
+              React.createElement(KpiCard, { title: "Missing 2B Claimed", value: formatCurrency(kpiData.missing2bClaimed), icon: React.createElement(Icons.CheckCircleIcon, { className: "h-6 w-6 text-primary" }), color: 'blue', onClick: function() { onKpiClick({tag:['Missing_2B_NowUploaded']}) } }),
               React.createElement(KpiCard, { title: "Missing PR Claimed", value: formatCurrency(kpiData.missingPrClaimed), icon: React.createElement(Icons.CheckCircleIcon, { className: "h-6 w-6 text-primary" }), color: 'blue' }),
               React.createElement(KpiCard, { title: "Total Recovered", value: formatCurrency(kpiData.totalRecovered), icon: React.createElement(Icons.CashIcon, { className: "h-6 w-6 text-primary" }), color: 'green' }),
               React.createElement(KpiCard, { title: "Success Rate", value: formatPercent(kpiData.successRate), icon: React.createElement(Icons.TrendingUpIcon, { className: "h-6 w-6 text-primary" }), color: 'green' })
             ),
-            React.createElement('div', { className: 'bg-white p-4 sm:p-6 rounded-lg shadow-md border border-slate-200' },
+            React.createElement('div', { className: 'bg-white dark:bg-slate-800 p-4 sm:p-6 rounded-lg shadow-md border border-slate-200 dark:border-slate-700' },
               (!chartData.monthly || Object.keys(chartData.monthly.data.labels).length === 0) && (!chartData.byCategory || Object.keys(chartData.byCategory.data.labels).length === 0) ?
-              React.createElement('p', { className: 'text-center text-slate-500 py-16' }, 'No data available to display charts for the current selection.')
+              React.createElement('p', { className: 'text-center text-slate-500 dark:text-slate-400 py-16' }, 'No data available to display charts for the current selection.')
               :
               React.createElement('div', { className: 'grid grid-cols-1 lg:grid-cols-2 gap-8 items-center' },
-                  (chartData.monthly && Object.keys(chartData.monthly.data.labels).length > 0) && React.createElement('div', { className: 'w-full' }, React.createElement(ChartComponent, { chartConfig: chartData.monthly })),
-                  (chartData.byCategory && Object.keys(chartData.byCategory.data.labels).length > 0) && React.createElement('div', { className: 'w-full max-h-80 flex justify-center' }, React.createElement(ChartComponent, { chartConfig: chartData.byCategory })),
-                  (chartData.topSuppliers && Object.keys(chartData.topSuppliers.data.labels).length > 0) && React.createElement('div', { className: 'w-full lg:col-span-2' }, React.createElement(ChartComponent, { chartConfig: chartData.topSuppliers }))
+                  (chartData.monthly && Object.keys(chartData.monthly.data.labels).length > 0) && React.createElement(ErrorBoundary, { message: 'Monthly chart failed to load' }, React.createElement('div', { className: 'w-full' }, React.createElement(ChartComponent, { chartConfig: chartData.monthly }))),
+                  (chartData.byCategory && Object.keys(chartData.byCategory.data.labels).length > 0) && React.createElement(ErrorBoundary, { message: 'Category chart failed to load' }, React.createElement('div', { className: 'w-full max-h-80 flex justify-center' }, React.createElement(ChartComponent, { chartConfig: chartData.byCategory }))),
+                  (chartData.topSuppliers && Object.keys(chartData.topSuppliers.data.labels).length > 0) && React.createElement(ErrorBoundary, { message: 'Suppliers chart failed to load' }, React.createElement('div', { className: 'w-full lg:col-span-2' }, React.createElement(ChartComponent, { chartConfig: chartData.topSuppliers })))
               )
             )
           )};
           
+          const renderTabContent = () => {
+              switch(activeTab) {
+                  case 'KPIs': return e(KpiPage, null);
+                  case 'Transactions': return e(TransactionsPage, { data: filteredData, actionState: actionState, updateAction: updateAction, updateMultipleActions: updateMultipleActions });
+                  case 'Suppliers': return e(SuppliersPage, { data: filteredData, assignmentState: assignmentState, updateAssignment: updateAssignment });
+                  case 'Mailing List': return e(MailingListPage, { data: filteredData, actionState: actionState, assignmentState: assignmentState, setPrintModalData: setPrintModalData });
+                  case 'Validate with Books': return e(ValidationPage, { allData: allData, validationBooks: validationBooks, onValidateWithBooks: onValidateWithBooks });
+                  default: return null;
+              }
+          };
+
           return React.createElement('div', { className: 'min-h-screen flex flex-col' },
-              React.createElement(ThinkingModeModal, { 
-                  isOpen: isThinkingModalOpen, 
-                  onClose: function() { setIsThinkingModalOpen(false) },
-                  contextData: filteredData
-              }),
               React.createElement('div', { className: 'sticky top-0 z-20' },
                   React.createElement(Header, null),
                   React.createElement(Navigation, null)
               ),
               React.createElement('main', { className: 'flex-grow w-full max-w-screen-2xl mx-auto p-4 md:p-6' },
-                  activeTab === 'KPIs' && React.createElement(KpiPage, null),
-                  activeTab === 'Transactions' && React.createElement(TransactionsPage, { data: filteredData, actionState: actionState, updateAction: updateAction }),
-                  activeTab === 'Suppliers' && React.createElement(SuppliersPage, { data: filteredData, assignmentState: assignmentState, updateAssignment: updateAssignment }),
-                  activeTab === 'Mailing List' && React.createElement(MailingListPage, { data: filteredData, actionState: actionState, assignmentState: assignmentState, setPrintModalData: setPrintModalData }),
-                  activeTab === 'Validate with Books' && React.createElement(ValidationPage, { allData: allData, validationBooks: validationBooks, onValidateWithBooks: onValidateWithBooks })
+                  e(ErrorBoundary, { message: `Failed to load the '${activeTab}' tab.` }, renderTabContent())
               ),
               React.createElement(Chatbot, { 
                   slicerOptions,
@@ -1849,10 +2067,19 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
           {id: 'row_10', 'Company Name': 'Stark Industries', 'Supplier Name': 'Wayne Enterprises', 'Document Number (2B)': 'INV001', 'Document Date (2B)': '15-04-2023', 'Total GST': 18000, 'Sum of Taxable Value (2B)': 100000, Type: 'Missing_2B_Cumulative', 'Financial Year': '2023-24', Month: 'Apr', Remarks: ''},
       ];
 
+      const SavingIndicator = function({ isSaving }) {
+          if (!isSaving) return null;
+          return e('div', { className: 'fixed bottom-5 left-5 bg-slate-800 text-white text-sm font-medium px-4 py-2 rounded-lg shadow-lg z-50 flex items-center animate-pulse' },
+              e('div', { className: 'w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-2' }),
+              'Saving...'
+          );
+      };
+
       const App = function() {
           const [isAuthenticated, setIsAuthenticated] = useState(false);
           const [view, setView] = useState('main_landing');
           const [isLoading, setIsLoading] = useState(false);
+          const [isSaving, setIsSaving] = useState(false);
           const [statusMessage, setStatusMessage] = useState('');
           const [progress, setProgress] = useState(0);
           const [allData, setAllData] = useState([]);
@@ -1863,6 +2090,42 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
           const [filters, setFilters] = useState({ company: [], financialYear: [], month: [], tag: [] });
           const [activeTab, setActiveTab] = useState('KPIs');
           const [printModalData, setPrintModalData] = useState({ isOpen: false, category: '', data: [] });
+          const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
+          const [savedViews, setSavedViews] = useState(() => {
+              try {
+                  return JSON.parse(localStorage.getItem('gst_saved_views')) || {};
+              } catch (e) {
+                  return {};
+              }
+          });
+
+          useEffect(() => {
+              if (theme === 'dark') {
+                  document.documentElement.classList.add('dark');
+              } else {
+                  document.documentElement.classList.remove('dark');
+              }
+              localStorage.setItem('theme', theme);
+          }, [theme]);
+          
+          const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
+
+          const saveCurrentView = (name) => {
+              const newViews = { ...savedViews, [name]: filters };
+              setSavedViews(newViews);
+              localStorage.setItem('gst_saved_views', JSON.stringify(newViews));
+          };
+
+          const applyView = (name) => {
+              if (savedViews[name]) setFilters(savedViews[name]);
+          };
+
+          const deleteView = (name) => {
+              const newViews = { ...savedViews };
+              delete newViews[name];
+              setSavedViews(newViews);
+              localStorage.setItem('gst_saved_views', JSON.stringify(newViews));
+          };
           
           const initializeData = useCallback(function(data, actions, assignments, books) {
               setAllData(data);
@@ -1878,8 +2141,6 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
                   setFilters({ company: [], financialYear: [], month: [], tag: [] });
                   setView('dashboard');
               } else {
-                  // This case should ideally not be hit if initialize is only called with data,
-                  // but as a fallback, go to startup.
                   setView('startup');
               }
               setIsLoading(false);
@@ -1902,11 +2163,9 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
               setProgress(10);
               setStatusMessage('Starting upload...');
               try {
-                  await new Promise(function(res) { return setTimeout(res, 200) });
-                  
                   const onProgress = function(p, msg) {
-                      setProgress(10 + p * 70);
-                      setStatusMessage(msg || `Processing data... ${Math.round(p * 100)}%`);
+                      setProgress(p * 100);
+                      setStatusMessage(msg || `Processing data...`);
                   };
 
                   const data = await fileProcessor.processMainFile(file, onProgress);
@@ -1944,13 +2203,11 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
                   } else {
                       setIsLoading(false);
                       setStatusMessage('No saved data found or session is invalid. Please upload a file.');
-                      // Do not change view, stay on startup screen
                   }
               } catch (error) {
                   const message = error instanceof Error ? error.message : "An unknown error occurred.";
                   setStatusMessage(`Error loading data: ${message}`);
                   setIsLoading(false);
-                  // Do not change view, stay on startup screen
               }
           }, [initializeData]);
 
@@ -1992,24 +2249,51 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
           )};
 
           const updateAction = async function(id, value) {
-              const newActionState = {...actionState, [id]: value};
-              setActionState(newActionState);
-              await dbService.saveData(allData, newActionState, assignmentState);
+              setIsSaving(true);
+              try {
+                  const newActionState = {...actionState, [id]: value};
+                  setActionState(newActionState);
+                  await dbService.saveData(allData, newActionState, assignmentState);
+              } finally {
+                  setIsSaving(false);
+              }
+          };
+          
+          const updateMultipleActions = async (ids, actionValue) => {
+              setIsSaving(true);
+              try {
+                  const newActionState = { ...actionState };
+                  ids.forEach(id => {
+                      const currentAction = newActionState[id];
+                      const newAction = typeof currentAction === 'object' ? { ...currentAction } : {};
+                      newAction.action = actionValue;
+                      newActionState[id] = newAction;
+                  });
+                  setActionState(newActionState);
+                  await dbService.saveData(allData, newActionState, assignmentState);
+              } finally {
+                  setIsSaving(false);
+              }
           };
           
           const updateAssignment = async function(key, category) {
-              const newAssignmentState = {...assignmentState};
-              if(category === 'None' || !category) {
-                delete newAssignmentState[key];
-              } else {
-                newAssignmentState[key] = category;
+              setIsSaving(true);
+              try {
+                  const newAssignmentState = {...assignmentState};
+                  if(category === 'None' || !category) {
+                    delete newAssignmentState[key];
+                  } else {
+                    newAssignmentState[key] = category;
+                  }
+                  setAssignmentState(newAssignmentState);
+                  await dbService.saveData(allData, actionState, newAssignmentState);
+              } finally {
+                  setIsSaving(false);
               }
-              setAssignmentState(newAssignmentState);
-              await dbService.saveData(allData, actionState, newAssignmentState);
           };
 
-          const handleKpiClick = function(tag) {
-              setFilters(function(prev) { return { ...prev, tag: [tag] } });
+          const handleKpiClick = function(newFilters) {
+              setFilters(function(prev) { return { ...prev, ...newFilters } });
               setActiveTab('Transactions');
           };
 
@@ -2038,7 +2322,7 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
                   const newActionState = { ...actionState };
                   const companyMainData = allData.filter(function(r) { return r['Company Name'] === companyName });
                   companyMainData.forEach(function(row) {
-                      if(row['Type'].startsWith('Missing_in_PR')) {
+                      if(row && typeof row.Type === 'string' && row.Type.startsWith('Missing_in_PR')) {
                           const key = `${row['Document Number (2B)']}|${row['Supplier GSTIN (2B)'] || ''}`;
                           if (bookLookup.has(key)) {
                               const currentAction = newActionState[row.id];
@@ -2052,8 +2336,13 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
                       }
                   });
                   if (updatedCount > 0) {
-                    setActionState(newActionState);
-                    await dbService.saveData(allData, newActionState, assignmentState);
+                    setIsSaving(true);
+                    try {
+                        setActionState(newActionState);
+                        await dbService.saveData(allData, newActionState, assignmentState);
+                    } finally {
+                        setIsSaving(false);
+                    }
                   }
                   const newBook = { companyName, data: bookData };
                   await dbService.saveValidationBook(newBook);
@@ -2078,8 +2367,8 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
           }
 
           return React.createElement(Fragment, null,
+              e(SavingIndicator, { isSaving }),
               (isLoading && view === 'dashboard') && React.createElement(FullScreenLoader, { message: statusMessage }),
-              React.createElement(PrintModal, { printModalData, setPrintModalData, actionState }),
               React.createElement('div', { style: { display: (isLoading && view === 'dashboard') ? 'none' : 'block' } },
                   view === 'main_landing' && React.createElement(MainLandingPage, { 
                       onNavigateToGst: handleNavigateToGst 
@@ -2102,6 +2391,7 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
                           setFilters, 
                           actionState, 
                           updateAction,
+                          updateMultipleActions,
                           assignmentState, 
                           updateAssignment, 
                           clearAllData: handleClearSaved, 
@@ -2112,8 +2402,15 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
                           onKpiClick: handleKpiClick,
                           setPrintModalData,
                           onNavigateToHome: handleNavigateToHome,
+                          theme,
+                          toggleTheme,
+                          savedViews,
+                          saveCurrentView,
+                          applyView,
+                          deleteView
                       })
-              )
+              ),
+              e(PrintModal, { printModalData, setPrintModalData, actionState })
           );
       };
 
