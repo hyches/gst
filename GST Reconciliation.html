@@ -898,6 +898,7 @@ const fileProcessor = (function() {
                     // Optionally, collect errors to show to the user
                 }
             }
+            console.log('Parsed PDF results:', results);
             return results;
         }
     };
@@ -1972,7 +1973,7 @@ const PrintModal = ({ printModalData, setPrintModalData, actionState }) => {
         e('div', { id: 'print-modal-content', className: 'bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] flex flex-col' },
             e('div', { id: 'print-modal-header', className: 'p-4 border-b dark:border-slate-700 flex justify-between items-center' },
                 e('h2', { className: 'text-xl font-bold dark:text-slate-100' }, `Preview: ${printModalData.category}`),
-                e('button', { onClick: () => setPrintModalData({isOpen: false, category: '', data: []}) }, className: 'text-2xl dark:text-slate-300' }, '×')
+                e('button', { onClick: () => setPrintModalData({isOpen: false, category: '', data: []}), className: 'text-2xl dark:text-slate-300' }, '×')
             ),
             e('div', { className: 'p-4 overflow-auto flex-grow' },
                 e('table', { id: 'print-table', className: 'w-full text-sm' },
@@ -2180,6 +2181,7 @@ const ReportsPage = ({ reportsData, updateReportsData }) => {
   };
 
   const handlePdfUploadResults = (results) => {
+      console.log('Handling PDF upload results:', results);
       const mergedData = results.reduce((acc, current) => {
           if (!current.companyName || !current.month) return acc;
           const key = `${current.companyName}|${current.month}`;
@@ -2971,6 +2973,7 @@ const App = function() {
   const updateReports = (newReports) => {
       updateState({ reports: newReports });
   };
+  window.test_updateReports = updateReports;
   
   const handleValidateWithBooks = async (file) => {
       try {
@@ -3102,7 +3105,6 @@ const App = function() {
 
   return e('div', null, 'Something went wrong with application routing.');
 };
-
 ReactDOM.createRoot(document.getElementById('root')).render(e(StrictMode, null, e(App)));
     </script>
   </body>
