@@ -1,0 +1,223 @@
+let
+    FolderPath = "D:\GST_Files",
+
+    // Step 1️⃣ — Load all PDF files
+    SourceFolder = Folder.Files(FolderPath),
+    PDFFiles = Table.SelectRows(SourceFolder, each Text.EndsWith([Extension], ".pdf")),
+
+    // Step 2️⃣ — Clean numeric text safely → number
+    CleanNum = (v as any) as nullable number =>
+        let
+            txt = if v = null then "" else Text.From(v),
+            cleaned = Text.Trim(Text.Remove(txt, {",", "₹", " "})),
+            num = try Number.From(cleaned) otherwise null
+        in
+            num,
+
+    // Step 3️⃣ — Extractor function
+    ExtractFromPDF = (fileContent as binary, fileName as text) =>
+        let
+            pdfTables = try Pdf.Tables(fileContent, [Implementation="1.3"]) otherwise null,
+
+            // === TABLE 001: Financial Year / Period ===
+            Table001 = try pdfTables{[Id="Table001"]}[Data] otherwise null,
+            FY = if Table001 <> null then try Table001{0}[Column2] otherwise null else null,
+            Period = if Table001 <> null then try Table001{1}[Column2] otherwise null else null,
+
+            // --- Detect File Type ---
+            normFileName = Text.Upper(fileName),
+            isGSTR1 = Text.StartsWith(normFileName, "GSTR1"),
+            isGSTR3B = Text.StartsWith(normFileName, "GSTR3B") or Text.StartsWith(normFileName, "GSTR 3B"),
+
+            // === TABLE 002: GSTIN / Name / ARN ===
+            Table002 = try pdfTables{[Id="Table002"]}[Data] otherwise null,
+            GSTIN = if isGSTR1 then (try Table002{0}[Column4] otherwise null)
+                    else if isGSTR3B then (try Table002{0}[Column2] otherwise null)
+                    else null,
+            LegalName = if isGSTR1 then (try Table002{1}[Column4] otherwise null)
+                        else if isGSTR3B then (try Table002{1}[Column2] otherwise null)
+                        else null,
+            ARN = if isGSTR1 then (try Table002{3}[Column4] otherwise null)
+                  else if isGSTR3B then (try Table002{3}[Column2] otherwise null)
+                  else null,
+            ARNDate = if isGSTR1 then (try Table002{4}[Column4] otherwise null)
+                      else if isGSTR3B then (try Table002{4}[Column2] otherwise null)
+                      else null,
+
+            // === TABLE 003: Tax Summary (core section) ===
+            Table003 =
+                if pdfTables <> null and Table.HasColumns(pdfTables, "Data") then
+                    try pdfTables{[Id="Table003"]}[Data]
+                    otherwise try pdfTables{2}[Data]
+                    otherwise null
+                else null,
+
+            Processed =
+                if Table003 <> null then
+                    let
+                        Renamed = Table.RenameColumns(Table003, {{"Column1","Description"}}, MissingField.UseNull),
+                        Cleaned = Table.ReplaceValue(Renamed, null, "", Replacer.ReplaceValue, Table.ColumnNames(Renamed)),
+                        allCols = Table.ColumnNames(Cleaned),
+                        right5 = if List.Count(allCols) >= 6 then List.LastN(allCols, 5) else allCols,
+                        Indexed = Table.AddIndexColumn(Cleaned, "RowNo", 1, 1, Int64.Type),
+
+                        // --- GSTR-1 specific rows ---
+                        RCRow_1  = try Table.SelectRows(Indexed, each [RowNo]=6){0} otherwise null,
+                        EXPRow_1 = try Table.SelectRows(Indexed, each [RowNo]=12){0} otherwise null,
+                        TotalLiabRow_1 = try Table.SelectRows(Indexed, each Text.Contains(Text.Lower([Description]), "total liability")){0} otherwise null,
+
+                        // --- GSTR-3B specific rows ---
+                        RegularRow_3B = try Table003{1} otherwise null,
+                        ExportRow_3B  = try Table003{2} otherwise null,
+                        ReverseRow_3B = try Table003{4} otherwise null,
+
+                        // --- Choose rows per file type ---
+                        TotalLiabRow = if isGSTR1 then TotalLiabRow_1 else RegularRow_3B,
+                        RCRow        = if isGSTR1 then RCRow_1        else ReverseRow_3B,
+                        EXPRow       = if isGSTR1 then EXPRow_1       else ExportRow_3B,
+
+                        // --- Extract numeric data ---
+                        TotalVals = if TotalLiabRow<>null then List.Transform(right5, each CleanNum(Record.FieldOrDefault(TotalLiabRow,_))) else List.Repeat({null},5),
+                        RCValues  = if RCRow<>null        then List.Transform(right5, each CleanNum(Record.FieldOrDefault(RCRow,_)))        else List.Repeat({null},5),
+                        EXPValues = if EXPRow<>null       then List.Transform(right5, each CleanNum(Record.FieldOrDefault(EXPRow,_)))       else List.Repeat({null},5),
+
+                        // 🔹 Adjustment: exclude exports from Total Liability for GSTR-1
+                        AdjTotalVals =
+                            if isGSTR1 and List.Count(TotalVals)>0 and List.Count(EXPValues)>0 then
+                                let adjValue = (if TotalVals{0}<>null then TotalVals{0} else 0)
+                                               - (if EXPValues{0}<>null then EXPValues{0} else 0),
+                                    newTotal = List.ReplaceRange(TotalVals,0,1,{adjValue})
+                                in newTotal
+                            else TotalVals,
+
+                        // === TABLE 007: ITC Availed ===
+                        Table007 = try pdfTables{[Id="Table007"]}[Data] otherwise null,
+                        right5_7 = if Table007<>null then List.LastN(Table.ColumnNames(Table007),5) else {},
+                        ITCRow = if Table007<>null then try Table007{5} otherwise null else null,
+                        ITCAvailedVals = if ITCRow<>null then List.Transform(right5_7, each CleanNum(Record.FieldOrDefault(ITCRow,_))) else List.Repeat({null},5),
+
+                        // === TABLE 009: Interest & Late Fee ===
+                        Table009 = try pdfTables{[Id="Table009"]}[Data] otherwise null,
+                        right5_9 = if Table009<>null then List.LastN(Table.ColumnNames(Table009),5) else {},
+                        InterestRow = if Table009<>null then try Table009{2} otherwise null else null,
+                        LateFeeRow  = if Table009<>null then try Table009{3} otherwise null else null,
+                        InterestVals = if InterestRow<>null then List.Transform(right5_9, each CleanNum(Record.FieldOrDefault(InterestRow,_))) else List.Repeat({null},5),
+                        LateFeeVals  = if LateFeeRow<>null  then List.Transform(right5_9, each CleanNum(Record.FieldOrDefault(LateFeeRow,_)))  else List.Repeat({null},5),
+
+                        // === TABLE 010: Discharge of Liability ===
+                        Table010 = try pdfTables{[Id="Table010"]}[Data] otherwise null,
+                        Transposed = if Table010<>null then Table.Transpose(Table010) else null,
+                        RemovedFirstCol = if Transposed<>null then try Table.RemoveColumns(Transposed, {"Column1"}) otherwise Transposed else null,
+                        Cols_4to6 = if RemovedFirstCol<>null then List.Range(Table.ColumnNames(RemovedFirstCol),3,3) else {},
+
+                        // ✅ UPDATED AS REQUESTED
+                        PayableRow4 = if RemovedFirstCol<>null then try RemovedFirstCol{3} otherwise null else null,
+                        PayableVals = if PayableRow4<>null then List.Transform(Cols_4to6, each CleanNum(Record.FieldOrDefault(PayableRow4,_))) else List.Repeat({null},3),
+
+                        ITC_Utilized_Row4 = if RemovedFirstCol<>null then try RemovedFirstCol{3} otherwise null else null,
+                        ITC_Utilized_Row5 = if RemovedFirstCol<>null then try RemovedFirstCol{4} otherwise null else null,
+                        ITC_Utilized_Row6 = if RemovedFirstCol<>null then try RemovedFirstCol{5} otherwise null else null,
+
+                        ITC_Utilized_IGSTVals = if ITC_Utilized_Row4<>null then List.Transform(Cols_4to6, each CleanNum(Record.FieldOrDefault(ITC_Utilized_Row4,_))) else List.Repeat({null},3),
+                        ITC_Utilized_CGSTVals = if ITC_Utilized_Row5<>null then List.Transform(Cols_4to6, each CleanNum(Record.FieldOrDefault(ITC_Utilized_Row5,_))) else List.Repeat({null},3),
+                        ITC_Utilized_SGSTVals = if ITC_Utilized_Row6<>null then List.Transform(Cols_4to6, each CleanNum(Record.FieldOrDefault(ITC_Utilized_Row6,_))) else List.Repeat({null},3)
+                    in
+                        [
+                            FileName = fileName,
+                            FileType = if isGSTR1 then "GSTR-1" else if isGSTR3B then "GSTR-3B" else null,
+                            GSTIN = GSTIN,
+                            LegalName = LegalName,
+                            FinancialYear = FY,
+                            Period = Period,
+                            ARN = ARN,
+                            ARNDate = ARNDate,
+
+                            // --- Total Liability ---
+                            TotalLiability_Value = if List.Count(AdjTotalVals)>=1 then AdjTotalVals{0} else null,
+                            TotalLiability_IGST  = if List.Count(AdjTotalVals)>=2 then AdjTotalVals{1} else null,
+                            TotalLiability_CGST  = if List.Count(AdjTotalVals)>=3 then AdjTotalVals{2} else null,
+                            TotalLiability_SGST  = if List.Count(AdjTotalVals)>=4 then AdjTotalVals{3} else null,
+                            TotalLiability_Cess  = if List.Count(AdjTotalVals)>=5 then AdjTotalVals{4} else null,
+
+                            // --- Reverse Charge ---
+                            Reverse_Value = if List.Count(RCValues)>=1 then RCValues{0} else null,
+                            Reverse_IGST  = if List.Count(RCValues)>=2 then RCValues{1} else null,
+                            Reverse_CGST  = if List.Count(RCValues)>=3 then RCValues{2} else null,
+                            Reverse_SGST  = if List.Count(RCValues)>=4 then RCValues{3} else null,
+                            Reverse_Cess  = if List.Count(RCValues)>=5 then RCValues{4} else null,
+
+                            // --- Exports ---
+                            Export_Value = if List.Count(EXPValues)>=1 then EXPValues{0} else null,
+                            Export_IGST  = if List.Count(EXPValues)>=2 then EXPValues{1} else null,
+                            Export_CGST  = if List.Count(EXPValues)>=3 then EXPValues{2} else null,
+                            Export_SGST  = if List.Count(EXPValues)>=4 then EXPValues{3} else null,
+                            Export_Cess  = if List.Count(EXPValues)>=5 then EXPValues{4} else null,
+
+                            // --- ITC Availed ---
+                            ITC_Availed_IGST = if List.Count(ITCAvailedVals)>=2 then ITCAvailedVals{1} else null,
+                            ITC_Availed_CGST = if List.Count(ITCAvailedVals)>=3 then ITCAvailedVals{2} else null,
+                            ITC_Availed_SGST = if List.Count(ITCAvailedVals)>=4 then ITCAvailedVals{3} else null,
+                            ITC_Availed_Cess = if List.Count(ITCAvailedVals)>=5 then ITCAvailedVals{4} else null,
+
+                            // --- Interest & Late Fee ---
+                            Interest_IGST = if List.Count(InterestVals)>=2 then InterestVals{1} else null,
+                            Interest_CGST = if List.Count(InterestVals)>=3 then InterestVals{2} else null,
+                            Interest_SGST = if List.Count(InterestVals)>=4 then InterestVals{3} else null,
+                            LateFee_IGST  = if List.Count(LateFeeVals)>=2 then LateFeeVals{1} else null,
+                            LateFee_CGST  = if List.Count(LateFeeVals)>=3 then LateFeeVals{2} else null,
+                            LateFee_SGST  = if List.Count(LateFeeVals)>=4 then LateFeeVals{3} else null,
+
+                            // --- Discharge of Liability ---
+                            Payable_IGST = if List.Count(PayableVals)>=1 then PayableVals{0} else null,
+                            Payable_CGST = if List.Count(PayableVals)>=2 then PayableVals{1} else null,
+                            Payable_SGST = if List.Count(PayableVals)>=3 then PayableVals{2} else null,
+
+                            ITC_Utilized_IGST = if List.Count(ITC_Utilized_IGSTVals)>=1 then ITC_Utilized_IGSTVals{0} else null,
+                            ITC_Utilized_CGST = if List.Count(ITC_Utilized_CGSTVals)>=2 then ITC_Utilized_CGSTVals{1} else null,
+                            ITC_Utilized_SGST = if List.Count(ITC_Utilized_SGSTVals)>=3 then ITC_Utilized_SGSTVals{2} else null,
+
+                            Status = "OK"
+                        ]
+                else
+                    [
+                        FileName = fileName, FileType=null, GSTIN=null, LegalName=null, FinancialYear=null, Period=null,
+                        ARN=null, ARNDate=null,
+                        TotalLiability_Value=null,TotalLiability_IGST=null,TotalLiability_CGST=null,TotalLiability_SGST=null,TotalLiability_Cess=null,
+                        Reverse_Value=null,Reverse_IGST=null,Reverse_CGST=null,Reverse_SGST=null,Reverse_Cess=null,
+                        Export_Value=null,Export_IGST=null,Export_CGST=null,Export_SGST=null,Export_Cess=null,
+                        ITC_Availed_IGST=null,ITC_Availed_CGST=null,ITC_Availed_SGST=null,ITC_Availed_Cess=null,
+                        Interest_IGST=null,Interest_CGST=null,Interest_SGST=null,
+                        LateFee_IGST=null,LateFee_CGST=null,LateFee_SGST=null,
+                        Payable_IGST=null,Payable_CGST=null,Payable_SGST=null,
+                        ITC_Utilized_IGST=null,ITC_Utilized_CGST=null,ITC_Utilized_SGST=null,
+                        Status="MISSING"
+                    ]
+        in
+            Processed,
+
+    // Step 4️⃣ Apply extractor to all PDFs
+    Extracted = Table.AddColumn(PDFFiles,"Result",each ExtractFromPDF([Content],[Name])),
+
+    // Step 5️⃣ Expand results
+    Expanded = Table.ExpandRecordColumn(
+        Extracted,"Result",
+        {"FileName","FileType","GSTIN","LegalName","FinancialYear","Period","ARN","ARNDate",
+        "TotalLiability_Value","TotalLiability_IGST","TotalLiability_CGST","TotalLiability_SGST","TotalLiability_Cess",
+        "Reverse_Value","Reverse_IGST","Reverse_CGST","Reverse_SGST","Reverse_Cess",
+        "Export_Value","Export_IGST","Export_CGST","Export_SGST","Export_Cess",
+        "ITC_Availed_IGST","ITC_Availed_CGST","ITC_Availed_SGST","ITC_Availed_Cess",
+        "Interest_IGST","Interest_CGST","Interest_SGST",
+        "LateFee_IGST","LateFee_CGST","LateFee_SGST",
+        "Payable_IGST","Payable_CGST","Payable_SGST",
+        "ITC_Utilized_IGST","ITC_Utilized_CGST","ITC_Utilized_SGST","Status"}
+    ),
+
+    // Step 6️⃣ Cleanup
+    #"Removed Columns" = Table.RemoveColumns(Expanded,{"Content", "Extension", "Date accessed", "Date modified", "Date created", "Attributes", "Folder Path", "Name", "FileName", "FileType", "TotalLiability_Cess", "Reverse_Cess"}),
+    #"Added Custom" = Table.AddColumn(#"Removed Columns", "Total Tax Liability", each [TotalLiability_IGST]+[TotalLiability_CGST]+[TotalLiability_SGST]),
+    #"Added Custom1" = Table.AddColumn(#"Added Custom", "Total ITC Availed", each [ITC_Availed_IGST]+[ITC_Availed_CGST]+[ITC_Availed_SGST]),
+    #"Added Custom2" = Table.AddColumn(#"Added Custom1", "Tax Paid by Cash", each if ([Total Tax Liability] - [Total ITC Availed]) < 1 then 0 else ([Total Tax Liability] - [Total ITC Availed])),
+    #"Removed Columns1" = Table.RemoveColumns(#"Added Custom2",{"Payable_IGST", "Payable_CGST", "Payable_SGST", "ITC_Utilized_IGST", "ITC_Utilized_CGST", "ITC_Utilized_SGST", "Status"}),
+    #"Added Custom3" = Table.AddColumn(#"Removed Columns1", "Carry Forward", each if([Total ITC Availed]-[Total Tax Liability]) >1 then ([Total ITC Availed]-[Total Tax Liability]) else 0)
+in
+    #"Added Custom3"
