@@ -1,0 +1,325 @@
+Option Explicit
+
+' ---------------------------
+' Consolidation: extract pivot-displayed rows only (no slicers/objects)
+' - Folder picker for root PivotFiles
+' - Scans month subfolders
+' - Creates MasterSummary, Transactions, ErrorLog in a new workbook
+' ---------------------------
+
+Public Sub Consolidate_Pivots_Gemini()
+    Dim fd As FileDialog
+    Dim rootPath As String
+    Dim fso As Object, rootFld As Object, subFld As Object, fileObj As Object
+    Dim srcWB As Workbook, srcWS As Worksheet, pvt As PivotTable
+    Dim destWB As Workbook, transWS As Worksheet, summWS As Worksheet, errWS As Worksheet
+    Dim rng As Range
+    Dim arr As Variant
+    Dim rCount As Long, cCount As Long, r As Long, c As Long
+    Dim dataEnd As Long, lastIsTotal As Boolean
+    Dim monthName As String, rawName As String
+    Dim fileName As String, baseName As String, trimmedName As String
+    Dim supplierCol As Long, gstinCol As Long, docNoCol As Long, docDateCol As Long
+    Dim taxableCol As Long, igstCol As Long, cgstCol As Long, sgstCol As Long
+    Dim taxableSum As Double, igstSum As Double, cgstSum As Double, sgstSum As Double
+    Dim transRow As Long, summRow As Long, errRow As Long
+    Dim pivotID As Long, tableNo As Long
+    Dim outFullPath As String
+    
+    ' --- pick root folder ---
+    Set fd = Application.FileDialog(msoFileDialogFolderPicker)
+    With fd
+        .Title = "Select the PivotFiles root folder (contains monthly subfolders)"
+        .AllowMultiSelect = False
+        If .Show <> -1 Then
+            MsgBox "No folder selected. Exiting.", vbExclamation
+            Exit Sub
+        End If
+        rootPath = .SelectedItems(1)
+    End With
+    
+    ' ensure folder exists
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If Not fso.FolderExists(rootPath) Then
+        MsgBox "Folder not found: " & rootPath, vbExclamation
+        Exit Sub
+    End If
+    Set rootFld = fso.GetFolder(rootPath)
+    
+    ' --- create destination workbook & sheets ---
+    Set destWB = Workbooks.Add(xlWBATWorksheet)
+    On Error Resume Next
+    destWB.Worksheets(1).Name = "MasterSummary"
+    On Error GoTo 0
+    Set summWS = destWB.Worksheets("MasterSummary")
+    Set transWS = destWB.Worksheets.Add(After:=summWS)
+    transWS.Name = "Transactions"
+    Set errWS = destWB.Worksheets.Add(After:=transWS)
+    errWS.Name = "ErrorLog"
+    
+    ' headers
+    summWS.Range("A1:M1").Value = Array("PivotID", "S.No", "Particulars", "Taxable", "IGST", "CGST", "SGST", "Total", _
+                                        "WorkbookName", "SheetName", "PivotName", "TableNo", "MonthFolder")
+    summRow = 2
+    transWS.Range("A1:O1").Value = Array("PivotID", "WorkbookName", "SheetName", "PivotName", "TableNo", "MonthFolder", _
+                                         "Supplier Name", "Supplier GSTIN (2B)", "Document Number (2B)", "Document Date (2B)", _
+                                         "Sum of Taxable Value (2B)", "Sum of IGST (2B)", "Sum of CGST (2B)", "Sum of SGST (2B)", "SourceFileFullPath")
+    transRow = 2
+    errWS.Range("A1:E1").Value = Array("FilePath", "SheetName", "PivotName", "ErrorNum", "ErrorDesc")
+    errRow = 2
+    
+    ' *** FIX: Set Document Date column (J) to Text format to prevent date/month swap ***
+    transWS.Columns(10).NumberFormat = "@"
+    
+    pivotID = 0
+    Application.ScreenUpdating = False
+    Application.EnableEvents = False
+    
+    ' iterate month subfolders
+    For Each subFld In rootFld.SubFolders
+        rawName = CStr(subFld.Name)
+        
+        ' extract only month part before "-"
+        If InStr(rawName, "-") > 0 Then
+            monthName = Trim(Left(rawName, InStr(rawName, "-") - 1))
+        Else
+            monthName = rawName
+        End If
+        
+        ' iterate files in subfolder
+        For Each fileObj In subFld.Files
+            fileName = fileObj.Name
+            If LCase$(Right$(fileName, 4)) = ".xls" Or LCase$(Right$(fileName, 5)) = ".xlsx" Or _
+               LCase$(Right$(fileName, 5)) = ".xlsm" Or LCase$(Right$(fileName, 4)) = ".xlsb" Then
+                
+                On Error Resume Next
+                Set srcWB = Workbooks.Open(fileObj.Path, ReadOnly:=True)
+                If Err.Number <> 0 Or srcWB Is Nothing Then
+                    errWS.Cells(errRow, 1).Value = fileObj.Path
+                    errWS.Cells(errRow, 2).Value = ""
+                    errWS.Cells(errRow, 3).Value = ""
+                    errWS.Cells(errRow, 4).Value = Err.Number
+                    errWS.Cells(errRow, 5).Value = "Open error: " & Err.Description
+                    errRow = errRow + 1
+                    Err.Clear
+                    On Error GoTo 0
+                    GoTo NextFile
+                End If
+                On Error GoTo 0
+                
+                ' trimmed workbook name (remove first 14 chars if present)
+                baseName = fileName
+                If InStrRev(baseName, ".") > 0 Then baseName = Left$(baseName, InStrRev(baseName, ".") - 1)
+                If Len(baseName) > 14 Then trimmedName = Mid$(baseName, 15) Else trimmedName = baseName
+                
+                ' Clean the workbook name (using improved function)
+                trimmedName = CleanString(trimmedName)
+                
+                ' iterate worksheets
+                Dim particulars As String, h As String
+                For Each srcWS In srcWB.Worksheets
+                    If srcWS.Visible <> xlSheetVisible Then GoTo NextSheet
+                    tableNo = 0
+                    For Each pvt In srcWS.PivotTables
+                        tableNo = tableNo + 1
+                        pivotID = pivotID + 1
+                        
+                        On Error Resume Next
+                        Set rng = pvt.TableRange1    ' header + displayed rows
+                        If Err.Number <> 0 Or rng Is Nothing Then
+                            errWS.Cells(errRow, 1).Value = srcWB.FullName
+                            errWS.Cells(errRow, 2).Value = srcWS.Name
+                            errWS.Cells(errRow, 3).Value = pvt.Name
+                            errWS.Cells(errRow, 4).Value = Err.Number
+                            errWS.Cells(errRow, 5).Value = "TableRange1 error: " & Err.Description
+                            errRow = errRow + 1
+                            Err.Clear
+                            On Error GoTo 0
+                            GoTo NextPivot
+                        End If
+                        On Error GoTo 0
+                        
+                        ' load range into array (safe, prevents touching source)
+                        arr = rng.Value2
+                        rCount = UBound(arr, 1)
+                        cCount = UBound(arr, 2)
+                        
+                        ' need at least header + 1 row
+                        If rCount <= 1 Then GoTo NextPivot
+                        
+                        ' detect if last row is 'Total' and set dataEnd
+                        lastIsTotal = False
+                        For c = 1 To cCount
+                            If Not IsError(arr(rCount, c)) Then
+                                If InStr(LCase(CStr(arr(rCount, c))), "total") > 0 Then
+                                    lastIsTotal = True
+                                    Exit For
+                                End If
+                            End If
+                        Next c
+                        If lastIsTotal Then dataEnd = rCount - 1 Else dataEnd = rCount
+                        If dataEnd < 2 Then GoTo NextPivot
+                        
+                        ' identify columns by header content (contains)
+                        supplierCol = 0: gstinCol = 0: docNoCol = 0: docDateCol = 0
+                        taxableCol = 0: igstCol = 0: cgstCol = 0: sgstCol = 0
+                        For c = 1 To cCount
+                            h = LCase$(CStr(arr(1, c)))
+                            If supplierCol = 0 And InStr(h, "supplier name") > 0 Then supplierCol = c
+                            If gstinCol = 0 And InStr(h, "gstin") > 0 Then gstinCol = c
+                            If docNoCol = 0 And InStr(h, "document number") > 0 Then docNoCol = c
+                            If docDateCol = 0 And (InStr(h, "document date") > 0 Or InStr(h, "date") > 0) Then docDateCol = c
+                            If taxableCol = 0 And InStr(h, "taxable") > 0 Then taxableCol = c
+                            If igstCol = 0 And InStr(h, "igst") > 0 Then igstCol = c
+                            If cgstCol = 0 And InStr(h, "cgst") > 0 Then cgstCol = c
+                            If sgstCol = 0 And InStr(h, "sgst") > 0 Then sgstCol = c
+                        Next c
+                        
+                        ' particulars
+                        particulars = ""
+                        On Error Resume Next
+                        particulars = CStr(arr(2, 1))
+                        On Error GoTo 0
+                        If Trim(particulars) = "" Then particulars = srcWS.Name & " - " & pvt.Name
+                        
+                        ' compute totals from array rows 2..dataEnd
+                        taxableSum = 0: igstSum = 0: cgstSum = 0: sgstSum = 0
+                        For r = 2 To dataEnd
+                            If taxableCol > 0 Then taxableSum = taxableSum + ToDoubleSafe(arr(r, taxableCol))
+                            If igstCol > 0 Then igstSum = igstSum + ToDoubleSafe(arr(r, igstCol))
+                            If cgstCol > 0 Then cgstSum = cgstSum + ToDoubleSafe(arr(r, cgstCol))
+                            If sgstCol > 0 Then sgstSum = sgstSum + ToDoubleSafe(arr(r, sgstCol))
+                        Next r
+                        
+                        ' write master summary row
+                        summWS.Cells(summRow, 1).Value = pivotID
+                        summWS.Cells(summRow, 2).Value = summRow - 1
+                        summWS.Cells(summRow, 3).Value = particulars
+                        summWS.Cells(summRow, 4).Value = taxableSum
+                        summWS.Cells(summRow, 5).Value = igstSum
+                        summWS.Cells(summRow, 6).Value = cgstSum
+                        summWS.Cells(summRow, 7).Value = sgstSum
+                        summWS.Cells(summRow, 8).Value = taxableSum + igstSum + cgstSum + sgstSum
+                        summWS.Cells(summRow, 9).Value = trimmedName
+                        summWS.Cells(summRow, 10).Value = srcWS.Name
+                        summWS.Cells(summRow, 11).Value = pvt.Name
+                        summWS.Cells(summRow, 12).Value = tableNo
+                        summWS.Cells(summRow, 13).Value = monthName
+                        summRow = summRow + 1
+                        
+                        ' append transaction rows to Transactions (values only)
+                        For r = 2 To dataEnd
+                            transWS.Cells(transRow, 1).Value = pivotID
+                            transWS.Cells(transRow, 2).Value = trimmedName
+                            transWS.Cells(transRow, 3).Value = srcWS.Name
+                            transWS.Cells(transRow, 4).Value = pvt.Name
+                            transWS.Cells(transRow, 5).Value = tableNo
+                            transWS.Cells(transRow, 6).Value = monthName
+                            
+                            If supplierCol > 0 Then transWS.Cells(transRow, 7).Value = SafeString(arr(r, supplierCol))
+                            If gstinCol > 0 Then transWS.Cells(transRow, 8).Value = SafeString(arr(r, gstinCol))
+                            If docNoCol > 0 Then transWS.Cells(transRow, 9).Value = SafeString(arr(r, docNoCol))
+                            
+                            ' *** FIX: Use .Text property from the original range for the date, which is already set to Text format ***
+                            If docDateCol > 0 Then transWS.Cells(transRow, 10).Value = rng.Cells(r, docDateCol).Text
+                            
+                            If taxableCol > 0 Then transWS.Cells(transRow, 11).Value = ToDoubleSafe(arr(r, taxableCol))
+                            If igstCol > 0 Then transWS.Cells(transRow, 12).Value = ToDoubleSafe(arr(r, igstCol))
+                            If cgstCol > 0 Then transWS.Cells(transRow, 13).Value = ToDoubleSafe(arr(r, cgstCol))
+                            If sgstCol > 0 Then transWS.Cells(transRow, 14).Value = ToDoubleSafe(arr(r, sgstCol))
+                            transWS.Cells(transRow, 15).Value = srcWB.FullName
+                            
+                            transRow = transRow + 1
+                        Next r
+                        
+NextPivot:
+                        Erase arr
+                    Next pvt
+NextSheet:
+                Next srcWS
+                
+                ' close source workbook (no save)
+                On Error Resume Next
+                srcWB.Close SaveChanges:=False
+                On Error GoTo 0
+            End If
+NextFile:
+        Next fileObj
+    Next subFld
+    
+    ' Save destination workbook
+    outFullPath = rootPath & IIf(Right(rootPath, 1) = "\", "", "\") & "Consolidated_Pivots_" & Format(Now, "yyyymmdd_HHmmss") & ".xlsx"
+    On Error Resume Next
+    destWB.SaveAs fileName:=outFullPath, FileFormat:=xlOpenXMLWorkbook
+    If Err.Number <> 0 Then
+        MsgBox "Failed to save consolidated file: " & Err.Description, vbExclamation
+    Else
+        MsgBox "Consolidation complete." & vbCrLf & "Saved: " & outFullPath, vbInformation
+    End If
+    On Error GoTo 0
+    
+    Application.ScreenUpdating = True
+    Application.EnableEvents = True
+End Sub
+
+' -----------------------
+' Helper Functions
+' -----------------------
+
+Private Function ToDoubleSafe(v As Variant) As Double
+    On Error Resume Next
+    If IsError(v) Or IsEmpty(v) Then
+        ToDoubleSafe = 0
+    ElseIf IsNumeric(v) Then
+        ToDoubleSafe = CDbl(v)
+    Else
+        Dim s As String: s = Trim$(CStr(v))
+        s = Replace(s, ",", "")
+        If s = "" Then
+            ToDoubleSafe = 0
+        Else
+            ToDoubleSafe = CDbl(s)
+        End If
+    End If
+    On Error GoTo 0
+End Function
+
+Private Function SafeString(v As Variant) As String
+    If IsError(v) Or IsEmpty(v) Then
+        SafeString = ""
+    Else
+        SafeString = CStr(v)
+    End If
+End Function
+
+' *** IMPROVED: More robust cleaning of file names ***
+Private Function CleanString(ByVal inputString As String) As String
+    Dim result As String
+    
+    ' 1. Replace common delimiters with a single space
+    result = inputString
+    result = Replace(result, "_", " ")
+    result = Replace(result, "-", " ")
+    result = Replace(result, ".", " ")
+    result = Replace(result, "(", " ")
+    result = Replace(result, ")", " ")
+    
+    ' 2. Remove common version/suffix patterns (case-insensitive)
+    result = Replace(result, " V1", " ", , , vbTextCompare)
+    result = Replace(result, " V2", " ", , , vbTextCompare)
+    result = Replace(result, " V3", " ", , , vbTextCompare)
+    result = Replace(result, " V4", " ", , , vbTextCompare)
+    result = Replace(result, " V5", " ", , , vbTextCompare)
+    result = Replace(result, " V6", " ", , , vbTextCompare)
+    result = Replace(result, " Report", " ", , , vbTextCompare)
+    result = Replace(result, " Data", " ", , , vbTextCompare)
+
+    ' 3. Collapse any resulting multiple spaces into a single space
+    Do While InStr(result, "  ") > 0
+        result = Replace(result, "  ", " ")
+    Loop
+    
+    ' 4. Final Trim
+    CleanString = Trim(result)
+End Function
+
