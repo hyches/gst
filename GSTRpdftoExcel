@@ -9,10 +9,46 @@ let
     CleanNum = (v as any) as nullable number =>
         let
             txt = if v = null then "" else Text.From(v),
-            cleaned = Text.Trim(Text.Remove(txt, {",", "₹", " "})),
+            cleaned = Text.Trim(Text.Remove(txt, {",", "₹", " "})) ,
             num = try Number.From(cleaned) otherwise null
         in
             num,
+
+    // Step 2b — Normalise name for lookup
+    NormaliseName = (t as nullable text) as text =>
+        if t = null then "" else Text.Upper(Text.Trim(t)),
+
+    // === Hard-coded opening balances for October 2025 (LegalName -> Opening balance) ===
+    Oct2025OpeningList =
+        {
+            [LegalName = NormaliseName("ANKIT KEDIA"), Opening = 0],
+            [LegalName = NormaliseName("MANJUSHREE CAPITAL ADVISORS"), Opening = 5538017],
+            [LegalName = NormaliseName("SKY LIME LLP"), Opening = 78839],
+            [LegalName = NormaliseName("CAREMONT MEDTECH PRIVATE LIMITED"), Opening = 4769384],
+            [LegalName = NormaliseName("MANJUSHREE FINCAP PRIVATE LIMITED"), Opening = 2797831],
+            [LegalName = NormaliseName("FITRON WELLNESS LLP"), Opening = 32700],
+            [LegalName = NormaliseName("JALLAN POLYPACK INDIA PRIVATE LIMITED"), Opening = 0],
+            [LegalName = NormaliseName("MANJUSHREE VENTURES LLP"), Opening = 267241],
+            [LegalName = NormaliseName("MANJUSHREE INVESTMENT ADVISORY LLP"), Opening = 946099],
+            [LegalName = NormaliseName("MANJUSHREE PACKTEK PRIVATE LIMITED"), Opening = 7090583],
+            [LegalName = NormaliseName("MANJUSHREE SPNTEK PRIVATE LIMITED"), Opening = 123685948],
+            [LegalName = NormaliseName("MANJUSHREE UNITED CAPITAL PRIVATE LIMITED"), Opening = 0],
+            [LegalName = NormaliseName("VIMAL KEDIA"), Opening = 287044]
+        },
+
+    // Lookup helper: returns opening balance for given legalname & period (only Oct-2025 entries used)
+    GetOct2025Opening = (legal as nullable text, period as nullable text, fy as nullable text) as number =>
+        let
+            n = NormaliseName(legal),
+            found = List.First(List.Select(Oct2025OpeningList, each _[LegalName] = n), null),
+            openingFromList = if found <> null then found[Opening] else 0,
+            // Only apply the hard-coded opening when Period is "October" and FY appears to include "2025"
+            apply =
+                if Text.Trim(Text.Upper(Text.From(period))) = "OCTOBER"
+                   and (fy <> null and Text.Contains(Text.From(fy), "2025")) then openingFromList
+                else 0
+        in
+            apply,
 
     // Step 3️⃣ — Extractor function
     ExtractFromPDF = (fileContent as binary, fileName as text) =>
@@ -196,7 +232,7 @@ let
             Processed,
 
     // Step 4️⃣ Apply extractor to all PDFs
-    Extracted = Table.AddColumn(PDFFiles,"Result",each ExtractFromPDF([Content],[Name])),
+    Extracted = Table.AddColumn(PDFFiles,"Result",each ExtractFromPDF([Content],[Name])), 
 
     // Step 5️⃣ Expand results
     Expanded = Table.ExpandRecordColumn(
@@ -212,12 +248,34 @@ let
         "ITC_Utilized_IGST","ITC_Utilized_CGST","ITC_Utilized_SGST","Status"}
     ),
 
-    // Step 6️⃣ Cleanup
-    #"Removed Columns" = Table.RemoveColumns(Expanded,{"Content", "Extension", "Date accessed", "Date modified", "Date created", "Attributes", "Folder Path", "Name", "FileName", "FileType", "TotalLiability_Cess", "Reverse_Cess"}),
+    // Step 6️⃣ Cleanup and computed columns
+    #"Removed Columns" = Table.RemoveColumns(Expanded,{"Content", "Extension", "Date accessed", "Date modified", "Date created", "Attributes", "Folder Path", "Name", "FileName", "TotalLiability_Cess", "Reverse_Cess"}),
+
+    // Total Tax Liability
     #"Added Custom" = Table.AddColumn(#"Removed Columns", "Total Tax Liability", each [TotalLiability_IGST]+[TotalLiability_CGST]+[TotalLiability_SGST]),
+
+    // Total ITC Availed
     #"Added Custom1" = Table.AddColumn(#"Added Custom", "Total ITC Availed", each [ITC_Availed_IGST]+[ITC_Availed_CGST]+[ITC_Availed_SGST]),
-    #"Added Custom2" = Table.AddColumn(#"Added Custom1", "Tax Paid by Cash", each if ([Total Tax Liability] - [Total ITC Availed]) < 1 then 0 else ([Total Tax Liability] - [Total ITC Availed])),
-    #"Removed Columns1" = Table.RemoveColumns(#"Added Custom2",{"Payable_IGST", "Payable_CGST", "Payable_SGST", "ITC_Utilized_IGST", "ITC_Utilized_CGST", "ITC_Utilized_SGST", "Status"}),
-    #"Added Custom3" = Table.AddColumn(#"Removed Columns1", "Carry Forward", each if([Total ITC Availed]-[Total Tax Liability]) >1 then ([Total ITC Availed]-[Total Tax Liability]) else 0)
+
+    // ITC Opening Balance (hard-coded lookup for Oct-2025 using LegalName + Period + FinancialYear)
+    #"Added ITC Opening" = Table.AddColumn(#"Added Custom1", "ITC Opening Balance", each GetOct2025Opening([LegalName],[Period],[FinancialYear]), type number),
+
+    // Tax Paid by Cash (updated formula subtracting ITC Opening Balance)
+    #"Added TaxPaidByCash" = Table.AddColumn(#"Added ITC Opening", "Tax Paid by Cash", each if ([Total Tax Liability] - [Total ITC Availed] - [ITC Opening Balance]) < 0 then 0 else ([Total Tax Liability] - [Total ITC Availed] - [ITC Opening Balance]), type number),
+
+    // RCM paid by Cash = Reverse_IGST + Reverse_CGST + Reverse_SGST
+    #"Added RCMpaid" = Table.AddColumn(#"Added TaxPaidByCash", "RCM paid by Cash", each (if [Reverse_IGST] = null then 0 else [Reverse_IGST]) + (if [Reverse_CGST] = null then 0 else [Reverse_CGST]) + (if [Reverse_SGST] = null then 0 else [Reverse_SGST]), type number),
+
+    // Total Tax Paid by Tax = Tax Paid by Cash + RCM paid by Cash
+    #"Added TotalTaxPaidByTax" = Table.AddColumn(#"Added RCMpaid", "Total Tax Paid by Tax", each (if [Tax Paid by Cash]=null then 0 else [Tax Paid by Cash]) + (if [RCM paid by Cash]=null then 0 else [RCM paid by Cash]), type number),
+
+    // Remove the internal columns you wanted removed (preserve our new columns)
+    #"Removed Columns1" = Table.RemoveColumns(#"Added TotalTaxPaidByTax",{"Payable_IGST", "Payable_CGST", "Payable_SGST", "ITC_Utilized_IGST", "ITC_Utilized_CGST", "ITC_Utilized_SGST", "Status"}),
+
+    // Carry Forward remains same as before
+    #"Added Custom3" = Table.AddColumn(#"Removed Columns1", "Carry Forward", each if([Total ITC Availed]-[Total Tax Liability]) > 1 then ([Total ITC Availed]-[Total Tax Liability]) else 0, type number),
+
+    // Closing balance = ITC Opening Balance + Carry Forward
+    #"Added Closing" = Table.AddColumn(#"Added Custom3", "Closing balance", each (if [ITC Opening Balance]=null then 0 else [ITC Opening Balance]) + (if [Carry Forward]=null then 0 else [Carry Forward]), type number)
 in
-    #"Added Custom3"
+    #"Added Closing"
