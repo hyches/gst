@@ -1,0 +1,456 @@
+Option Explicit
+
+' ********** Date parsing helpers (public & first) **********
+Public Function TryParseDate(ByVal s As String, ByRef outDate As Date) As Boolean
+    ' Robust attempt to parse a variety of date formats
+    On Error GoTo ErrHandler
+    TryParseDate = False
+    If Trim(s) = "" Then Exit Function
+
+    Dim tmp As String: tmp = Trim(s)
+    tmp = Replace(tmp, ".", "-")
+    tmp = Replace(tmp, "/", "-")
+    tmp = Replace(tmp, vbTab, " ")
+    tmp = Trim(tmp)
+
+    ' Direct IsDate check first (handles many localized formats)
+    If IsDate(tmp) Then
+        outDate = CDate(tmp)
+        TryParseDate = True
+        Exit Function
+    End If
+
+    ' Try dd-mm-yyyy or dd-mm-yy
+    Dim parts() As String
+    parts = Split(tmp, "-")
+    If UBound(parts) >= 2 Then
+        If IsNumeric(parts(0)) And IsNumeric(parts(1)) And IsNumeric(parts(2)) Then
+            Dim y As Long, m As Long, d As Long
+            d = CLng(parts(0))
+            m = CLng(parts(1))
+            y = CLng(parts(2))
+            ' handle two-digit year
+            If y < 100 Then
+                If y < 30 Then y = 2000 + y Else y = 1900 + y
+            End If
+            outDate = DateSerial(y, m, d)
+            TryParseDate = True
+            Exit Function
+        End If
+    End If
+
+    ' Try "dd mmm yyyy" like "20 Nov 2025"
+    parts = Split(tmp, " ")
+    If UBound(parts) >= 2 Then
+        If IsNumeric(parts(0)) Then
+            On Error Resume Next
+            outDate = CDate(parts(0) & " " & parts(1) & " " & parts(2))
+            If Err.Number = 0 Then
+                TryParseDate = True
+                Exit Function
+            End If
+            On Error GoTo ErrHandler
+        End If
+    End If
+
+    ' Last attempt: try to find any yyyy token and dd token
+    Dim t As Variant
+    For Each t In Split(tmp, " ")
+        If Len(t) = 4 And Left(t, 2) = "20" And IsNumeric(t) Then
+            ' attempt using Month from text in string
+            On Error Resume Next
+            outDate = CDate(tmp)
+            If Err.Number = 0 Then
+                TryParseDate = True
+                Exit Function
+            End If
+            On Error GoTo ErrHandler
+        End If
+    Next t
+
+    Exit Function
+ErrHandler:
+    TryParseDate = False
+End Function
+
+Public Function IsDateString(ByVal s As String) As Boolean
+    Dim d As Date
+    IsDateString = TryParseDate(CStr(s), d)
+End Function
+
+Public Function IsDateStringLater(ByVal sNew As String, ByVal sExisting As String) As Boolean
+    Dim dNew As Date, dExist As Date
+    If Not TryParseDate(CStr(sNew), dNew) Then
+        IsDateStringLater = False
+        Exit Function
+    End If
+    If Not TryParseDate(CStr(sExisting), dExist) Then
+        IsDateStringLater = True
+        Exit Function
+    End If
+    IsDateStringLater = (dNew > dExist)
+End Function
+
+' ------------------------
+' Main routine
+' ------------------------
+Sub ExportMOutputToFormattedWorkbook()
+    ' === Configuration ===
+    Dim srcSheetName As String: srcSheetName = "MOutput"  ' change if your PQ output sheet has different name
+    Dim headerRow As Long: headerRow = 1                 ' row where headers are located in source sheet
+
+    Dim outWb As Workbook, outWs As Worksheet
+    Dim srcWs As Worksheet
+    Dim srcLastRow As Long, srcLastCol As Long
+    Dim hdrMap As Object: Set hdrMap = CreateObject("Scripting.Dictionary")
+    Dim i As Long, r As Long, c As Long
+    Dim srcHeaders() As String
+    Dim paymentTotal As Double: paymentTotal = 0
+    Dim outRow As Long: outRow = 2  ' data starts at row 2 in output
+
+    ' Ask user for month to extract
+    Dim monthInput As String
+    monthInput = Trim(InputBox("Enter the month to extract (e.g. October). Matching is case-insensitive and accepts short forms like Oct.", "Select Month", "October"))
+    If monthInput = "" Then
+        MsgBox "No month entered. Operation cancelled.", vbExclamation
+        Exit Sub
+    End If
+    monthInput = UCase(monthInput)
+
+    ' Attempt to get source worksheet
+    On Error Resume Next
+    Set srcWs = ThisWorkbook.Worksheets(srcSheetName)
+    On Error GoTo 0
+    If srcWs Is Nothing Then
+        MsgBox "Source sheet '" & srcSheetName & "' not found. Change srcSheetName variable to the correct worksheet name.", vbCritical
+        Exit Sub
+    End If
+
+    ' find last used row/column in source
+    srcLastRow = srcWs.Cells(srcWs.Rows.Count, 1).End(xlUp).Row
+    srcLastCol = srcWs.Cells(headerRow, srcWs.Columns.Count).End(xlToLeft).Column
+
+    ' read headers and build header-name -> column-index map (case-insensitive)
+    ReDim srcHeaders(1 To srcLastCol)
+    For c = 1 To srcLastCol
+        srcHeaders(c) = Trim(CStr(srcWs.Cells(headerRow, c).Value))
+        If Len(srcHeaders(c)) > 0 Then
+            hdrMap(LCase(srcHeaders(c))) = c
+        End If
+    Next c
+
+    ' === Candidate header lists (lowercase) - add any other variants you use ===
+    Dim candidatesCompany As Variant: candidatesCompany = Array("legalname", "legal name", "company", "company name", "name")
+    Dim candidatesGST As Variant: candidatesGST = Array("gstin", "gst number", "gst number ", "gst", "gst no", "gst number")
+    Dim candidatesPayment As Variant: candidatesPayment = Array("total tax paid by tax", "total tax paid", "tax paid by cash", "payment", "payment amount", "total tax paid by tax ")
+    Dim candidatesPayDate As Variant: candidatesPayDate = Array("payment date", "paymentdate", "payment_date", "arndate", "arn date", "arn_date", "arn")
+    Dim candidatesGSTR1 As Variant: candidatesGSTR1 = Array("gstr-1", "gstr1", "gstr 1", "gstr_1", "gstr - 1", "gstr1 arn", "gstr-1 arn")
+    Dim candidatesGSTR3B As Variant: candidatesGSTR3B = Array("gstr-3b", "gstr3b", "gstr 3b", "gstr_3b", "gstr - 3b", "gstr3b arn", "gstr-3b arn")
+    Dim candidatesPeriod As Variant: candidatesPeriod = Array("period", "period name", "period", "month", "periodname")
+    Dim candidatesFileType As Variant: candidatesFileType = Array("filetype", "file type", "file_type", "file", "file type", "filetype", "filetype ")
+
+    ' find column indexes for likely fields
+    Dim colCompany As Long, colGST As Long, colPayment As Long, colPayDate As Long
+    Dim colGSTR1 As Long, colGSTR3B As Long, colPeriod As Long, colFileType As Long, colARNDate As Long
+
+    colCompany = FindHeaderColumn(hdrMap, candidatesCompany)
+    colGST = FindHeaderColumn(hdrMap, candidatesGST)
+    colPayment = FindHeaderColumn(hdrMap, candidatesPayment)
+    colPayDate = FindHeaderColumn(hdrMap, candidatesPayDate) ' generic payment date header if present
+    colGSTR1 = FindHeaderColumn(hdrMap, candidatesGSTR1)
+    colGSTR3B = FindHeaderColumn(hdrMap, candidatesGSTR3B)
+    colPeriod = FindHeaderColumn(hdrMap, candidatesPeriod)
+    colFileType = FindHeaderColumn(hdrMap, candidatesFileType)
+
+    ' ARN date commonly is called ARNDate or ARN Date — try both explicitly too
+    colARNDate = 0
+    If hdrMap.Exists("arndate") Then colARNDate = hdrMap("arndate")
+    If colARNDate = 0 And hdrMap.Exists("arn date") Then colARNDate = hdrMap("arn date")
+    If colARNDate = 0 And hdrMap.Exists("arn_date") Then colARNDate = hdrMap("arn_date")
+
+    If colPayment = 0 Then
+        MsgBox "Warning: Could not find a column matching 'Total Tax Paid by Tax' (or variants). The script will try available payment columns but output Payment may be blank.", vbExclamation
+    End If
+    If colGST = 0 Then
+        MsgBox "Warning: Could not find a column matching 'GSTIN' (or variants). Output will use Company name as key if GSTIN missing.", vbExclamation
+    End If
+
+    ' === Build an aggregated dictionary keyed by GSTIN (or LegalName if GSTIN missing) for the chosen month ===
+    Dim dict As Object: Set dict = CreateObject("Scripting.Dictionary")
+    dict.CompareMode = vbTextCompare
+
+    Dim key As String
+    Dim rowPeriod As String, rowFileType As String, rowARN As String
+    Dim valPayment As Double
+    Dim companyName As String, gstVal As String
+
+    For r = headerRow + 1 To srcLastRow
+        rowPeriod = ""
+        If colPeriod > 0 Then rowPeriod = Trim(CStr(srcWs.Cells(r, colPeriod).Value))
+
+        If rowPeriod = "" Then
+            If hdrMap.Exists("financialyear") Then
+                rowPeriod = Trim(CStr(srcWs.Cells(r, hdrMap("financialyear")).Value))
+            ElseIf hdrMap.Exists("file name") Then
+                rowPeriod = Trim(CStr(srcWs.Cells(r, hdrMap("file name")).Value))
+            End If
+        End If
+
+        If rowPeriod = "" Then GoTo NextRowLoop
+
+        If InStr(1, UCase(rowPeriod), monthInput, vbTextCompare) = 0 Then GoTo NextRowLoop
+
+        companyName = ""
+        If colCompany > 0 Then companyName = Trim(CStr(srcWs.Cells(r, colCompany).Value))
+
+        gstVal = ""
+        If colGST > 0 Then gstVal = Trim(CStr(srcWs.Cells(r, colGST).Value))
+
+        rowFileType = ""
+        If colFileType > 0 Then rowFileType = Trim(CStr(srcWs.Cells(r, colFileType).Value))
+
+        rowARN = ""
+        If colARNDate > 0 Then rowARN = Trim(CStr(srcWs.Cells(r, colARNDate).Value))
+
+        valPayment = 0
+        If colPayment > 0 Then
+            valPayment = SafeNumeric(srcWs.Cells(r, colPayment).Value)
+        Else
+            Dim altCol As Long: altCol = 0
+            If hdrMap.Exists("tax paid by cash") Then altCol = hdrMap("tax paid by cash")
+            If altCol = 0 And hdrMap.Exists("tax paid") Then altCol = hdrMap("tax paid")
+            If altCol > 0 Then valPayment = SafeNumeric(srcWs.Cells(r, altCol).Value)
+        End If
+
+        If gstVal <> "" Then
+            key = gstVal
+        ElseIf companyName <> "" Then
+            key = "NAME|" & UCase(companyName)
+        Else
+            key = "ROW|" & CStr(r)
+        End If
+
+        If Not dict.Exists(key) Then
+            Dim item As Object: Set item = CreateObject("Scripting.Dictionary")
+            item.CompareMode = vbTextCompare
+            item("Company") = companyName
+            item("GST") = gstVal
+            item("Payment") = 0#
+            item("PaymentDate") = ""
+            item("GSTR1_ARN") = ""
+            item("GSTR3B_ARN") = ""
+            dict.Add key, item
+        End If
+
+        Dim thisItem As Object: Set thisItem = dict(key)
+        If valPayment <> 0 Then thisItem("Payment") = NzDouble(thisItem("Payment")) + NzDouble(valPayment)
+
+        Dim ft As String: ft = UCase(Trim(rowFileType))
+        Dim rowARNdateValue As Date
+        Dim arnIsDate As Boolean: arnIsDate = False
+        If rowARN <> "" Then arnIsDate = TryParseDate(rowARN, rowARNdateValue)
+
+        Dim candidateGSTR1ARN As String, candidateGSTR3BARN As String
+        candidateGSTR1ARN = ""
+        candidateGSTR3BARN = ""
+        If colGSTR1 > 0 Then candidateGSTR1ARN = Trim(CStr(srcWs.Cells(r, colGSTR1).Value))
+        If colGSTR3B > 0 Then candidateGSTR3BARN = Trim(CStr(srcWs.Cells(r, colGSTR3B).Value))
+
+        If candidateGSTR1ARN <> "" Then
+            Dim d1 As Date
+            If TryParseDate(candidateGSTR1ARN, d1) Then
+                thisItem("GSTR1_ARN") = Format(d1, "dd-mm-yyyy")
+            Else
+                If thisItem("GSTR1_ARN") = "" Then thisItem("GSTR1_ARN") = candidateGSTR1ARN
+            End If
+        End If
+        If candidateGSTR3BARN <> "" Then
+            Dim d3 As Date
+            If TryParseDate(candidateGSTR3BARN, d3) Then
+                thisItem("GSTR3B_ARN") = Format(d3, "dd-mm-yyyy")
+                If thisItem("PaymentDate") = "" Or IsDateStringLater(Format(d3, "dd-mm-yyyy"), thisItem("PaymentDate")) Then
+                    thisItem("PaymentDate") = Format(d3, "dd-mm-yyyy")
+                End If
+            Else
+                If thisItem("GSTR3B_ARN") = "" Then thisItem("GSTR3B_ARN") = candidateGSTR3BARN
+            End If
+        End If
+
+        If arnIsDate Then
+            Dim is3B As Boolean: is3B = False
+            If ft <> "" Then
+                If InStr(1, ft, "3B", vbTextCompare) > 0 Or InStr(1, ft, "GSTR-3B", vbTextCompare) > 0 Or InStr(1, ft, "GSTR3B", vbTextCompare) > 0 Then is3B = True
+            End If
+            If Not is3B Then
+                If candidateGSTR3BARN <> "" Then is3B = True
+            End If
+
+            If is3B Then
+                Dim currentPayDate As String: currentPayDate = thisItem("PaymentDate")
+                Dim newDateStr As String: newDateStr = Format(rowARNdateValue, "dd-mm-yyyy")
+                If currentPayDate = "" Then
+                    thisItem("PaymentDate") = newDateStr
+                Else
+                    If IsDateStringLater(newDateStr, currentPayDate) Then
+                        thisItem("PaymentDate") = newDateStr
+                    End If
+                End If
+                If thisItem("GSTR3B_ARN") = "" Then thisItem("GSTR3B_ARN") = newDateStr
+            Else
+                If InStr(1, UCase(rowFileType), "1", vbTextCompare) > 0 Or InStr(1, UCase(rowFileType), "GSTR-1", vbTextCompare) > 0 Then
+                    If arnIsDate Then
+                        Dim arnStr As String: arnStr = Format(rowARNdateValue, "dd-mm-yyyy")
+                        If thisItem("GSTR1_ARN") = "" Then thisItem("GSTR1_ARN") = arnStr
+                    Else
+                        If thisItem("GSTR1_ARN") = "" Then thisItem("GSTR1_ARN") = rowARN
+                    End If
+                End If
+            End If
+        End If
+
+NextRowLoop:
+    Next r
+
+    ' === Create output workbook and sheet ===
+    Set outWb = Workbooks.Add(xlWBATWorksheet)
+    Set outWs = outWb.Worksheets(1)
+    On Error Resume Next
+    outWs.Name = "Payments_Report"
+    On Error GoTo 0
+
+    ' Write headers
+    With outWs
+        .Cells(1, 1).Value = "Sr No"
+        .Cells(1, 2).Value = "Company"
+        .Cells(1, 3).Value = "GST Number"
+        .Cells(1, 4).Value = "Payment"
+        .Cells(1, 5).Value = "Payment Date"
+        .Cells(1, 6).Value = "GSTR-1"
+        .Cells(1, 7).Value = "GSTR-3B"
+        With .Range(.Cells(1, 1), .Cells(1, 7))
+            .Font.Bold = True
+            .Interior.Color = RGB(10, 60, 80)
+            .Font.Color = vbWhite
+        End With
+    End With
+
+    ' === Write dictionary contents to output sheet ===
+    Dim keys() As Variant
+    keys = dict.Keys
+
+    Dim outIdx As Long: outIdx = 1
+    Dim kk As Variant
+    For Each kk In keys
+        outIdx = outIdx + 1
+        Dim itemD As Object: Set itemD = dict(kk)
+
+        outWs.Cells(outIdx, 1).Value = outIdx - 1
+        outWs.Cells(outIdx, 2).Value = itemD("Company")
+        outWs.Cells(outIdx, 3).Value = itemD("GST")
+        If NzDouble(itemD("Payment")) <> 0 Then
+            outWs.Cells(outIdx, 4).Value = NzDouble(itemD("Payment"))
+            outWs.Cells(outIdx, 4).NumberFormat = "#,##0.00"
+            paymentTotal = paymentTotal + NzDouble(itemD("Payment"))
+        Else
+            outWs.Cells(outIdx, 4).Value = ""
+        End If
+
+        outWs.Cells(outIdx, 5).Value = itemD("PaymentDate")
+        If IsDateString(outWs.Cells(outIdx, 5).Value) Then outWs.Cells(outIdx, 5).NumberFormat = "dd-mm-yyyy"
+
+        outWs.Cells(outIdx, 6).Value = itemD("GSTR1_ARN")
+        If IsDateString(outWs.Cells(outIdx, 6).Value) Then outWs.Cells(outIdx, 6).NumberFormat = "dd-mm-yyyy"
+
+        outWs.Cells(outIdx, 7).Value = itemD("GSTR3B_ARN")
+        If IsDateString(outWs.Cells(outIdx, 7).Value) Then outWs.Cells(outIdx, 7).NumberFormat = "dd-mm-yyyy"
+    Next kk
+
+    ' Write payment total at bottom
+    Dim totalRow As Long: totalRow = outIdx + 1
+    outWs.Cells(totalRow, 3).Value = ""
+    outWs.Cells(totalRow, 4).Value = paymentTotal
+    outWs.Cells(totalRow, 4).NumberFormat = "#,##0.00"
+    outWs.Cells(totalRow, 4).Font.Bold = True
+    outWs.Cells(totalRow, 4).Interior.Color = RGB(10, 60, 80)
+    outWs.Cells(totalRow, 4).Font.Color = vbWhite
+
+    ' Formatting
+    With outWs
+        .Columns("A").ColumnWidth = 6
+        .Columns("B").ColumnWidth = 36
+        .Columns("C").ColumnWidth = 20
+        .Columns("D").ColumnWidth = 16
+        .Columns("E").ColumnWidth = 14
+        .Columns("F").ColumnWidth = 12
+        .Columns("G").ColumnWidth = 12
+        .Range(.Cells(1, 1), .Cells(totalRow, 7)).Borders.LineStyle = xlContinuous
+        .Range(.Cells(1, 1), .Cells(1, 7)).HorizontalAlignment = xlCenter
+        .Range(.Cells(2, 1), .Cells(totalRow, 1)).HorizontalAlignment = xlCenter
+        .UsedRange.Font.Name = "Calibri"
+        .UsedRange.Font.Size = 11
+    End With
+
+    ' freeze top row
+    outWs.Rows(2).Select
+    outWs.Range("A2").Application.ActiveWindow.SplitRow = 1
+    outWs.Range("A2").Application.ActiveWindow.FreezePanes = True
+
+    outWs.Rows("1:" & totalRow).RowHeight = 18
+
+    MsgBox "Export complete for month '" & monthInput & "'. New workbook created with sheet '" & outWs.Name & "'. Total payment = " & Format(paymentTotal, "#,##0.00"), vbInformation
+End Sub
+
+' -------------------------
+' Helper: find header column from candidate list
+' -------------------------
+Private Function FindHeaderColumn(ByVal hdrMap As Object, ByVal candidates As Variant) As Long
+    Dim i As Long, c As String
+    For i = LBound(candidates) To UBound(candidates)
+        c = LCase(Trim(candidates(i)))
+        If hdrMap.Exists(c) Then
+            FindHeaderColumn = hdrMap(c)
+            Exit Function
+        End If
+    Next i
+    FindHeaderColumn = 0
+End Function
+
+' -------------------------
+' Helper: safe numeric
+' -------------------------
+Private Function SafeNumeric(v As Variant) As Double
+    Dim s As String
+    If IsError(v) Or IsNull(v) Or IsEmpty(v) Then
+        SafeNumeric = 0
+        Exit Function
+    End If
+    If IsNumeric(v) Then
+        SafeNumeric = CDbl(v)
+        Exit Function
+    End If
+    s = CStr(v)
+    s = Replace(s, ",", "")
+    s = Trim(s)
+    If IsNumeric(s) Then
+        SafeNumeric = CDbl(s)
+    Else
+        SafeNumeric = 0
+    End If
+End Function
+
+' -------------------------
+' NzDouble
+' -------------------------
+Private Function NzDouble(v As Variant) As Double
+    If IsError(v) Or IsNull(v) Then
+        NzDouble = 0
+    ElseIf IsEmpty(v) Then
+        NzDouble = 0
+    ElseIf Trim(CStr(v)) = "" Then
+        NzDouble = 0
+    ElseIf IsNumeric(v) Then
+        NzDouble = CDbl(v)
+    Else
+        NzDouble = 0
+    End If
+End Function
