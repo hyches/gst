@@ -1700,6 +1700,7 @@ const ValidationPage = ({ allData, validationBooks, onValidateWithBooks }) => {
 
         const matched = [];
         const unmatched = [];
+        let unmatchedCounter = 0;
         
         allBookRows.forEach(bookRow => {
             const docNum = getCol(bookRow, ['Voucher Ref. No.', 'Document Number', 'Doc No', 'Invoice No']);
@@ -1711,20 +1712,28 @@ const ValidationPage = ({ allData, validationBooks, onValidateWithBooks }) => {
             // Try exact match first
             let key = `${bookRow['Company Name']}|${normalizedDocNum}|${normalizedGstin}`;
             let matchedRow = mainDataLookup.get(key);
+            let usedFallback = false;
             
             // If no exact match, try without GSTIN
             if (!matchedRow && normalizedDocNum) {
                 key = `${bookRow['Company Name']}|${normalizedDocNum}|`;
                 matchedRow = mainDataByDocNum.get(key);
+                usedFallback = true;
             }
             
             if (matchedRow) {
                 matched.push(matchedRow);
-                mainDataLookup.delete(key);
+                // Delete from the correct map based on which key was used
+                if (usedFallback) {
+                    mainDataByDocNum.delete(key);
+                } else {
+                    mainDataLookup.delete(key);
+                }
             } else {
+                unmatchedCounter++;
                 unmatched.push({
                     ...bookRow,
-                    id: `unmatched_${normalizedDocNum}_${Math.random()}`,
+                    id: `unmatched_${normalizedDocNum}_${unmatchedCounter}`,
                     'Supplier Name': getCol(bookRow, ['Party Name', 'Supplier Name']),
                     'Document Number (2B)': normalizedDocNum,
                     'Document Date (2B)': getCol(bookRow, ['Voucher Date', 'Document Date']),
