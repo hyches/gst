@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Liquid Glass & 3D Tilt Demo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      /* Liquid Glass Design System & 3D Parallax Effects */
+      :root {
+        --glass-bg: rgba(255, 255, 255, 0.7);
+        --glass-border: rgba(255, 255, 255, 0.18);
+        --glass-shadow: rgba(31, 38, 135, 0.15);
+        --blur-amount: 10px;
+        --tilt-max-rotation: 8deg;
+        --tilt-scale: 1.02;
+        --tilt-transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      
+      .dark {
+        --glass-bg: rgba(30, 41, 59, 0.7);
+        --glass-border: rgba(100, 116, 139, 0.18);
+        --glass-shadow: rgba(0, 0, 0, 0.3);
+      }
+      
+      .glass-card {
+        background: var(--glass-bg);
+        backdrop-filter: blur(var(--blur-amount));
+        -webkit-backdrop-filter: blur(var(--blur-amount));
+        border: 1px solid var(--glass-border);
+        box-shadow: 0 8px 32px 0 var(--glass-shadow);
+        transition: var(--tilt-transition);
+      }
+      
+      .tilt-card {
+        transform-style: preserve-3d;
+        perspective: 1000px;
+        transition: var(--tilt-transition);
+      }
+      
+      .tilt-card:hover {
+        transform: scale(var(--tilt-scale));
+      }
+      
+      .tilt-btn {
+        transform-style: preserve-3d;
+        transition: var(--tilt-transition);
+      }
+      
+      .tilt-btn:active {
+        transform: scale(0.98) translateZ(-10px);
+      }
+      
+      body {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+      }
+    </style>
+</head>
+<body class="p-8">
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-4xl font-bold text-white text-center mb-8">✨ Liquid Glass & 3D Tilt Effects ✨</h1>
+        
+        <div class="mb-8 glass-card p-6 rounded-xl">
+            <h2 class="text-2xl font-bold mb-4">Features Applied:</h2>
+            <ul class="space-y-2 text-lg">
+                <li>✅ Glass-morphism with backdrop blur</li>
+                <li>✅ 3D tilt effect on hover (move your mouse over cards)</li>
+                <li>✅ Smooth transitions with cubic-bezier easing</li>
+                <li>✅ Applied to KPI cards, buttons, and product cards</li>
+                <li>✅ Improved validation matching with fuzzy logic</li>
+            </ul>
+        </div>
+        
+        <h2 class="text-2xl font-bold text-white mb-4">KPI Cards with Glass & Tilt:</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="glass-card tilt-card p-6 rounded-lg">
+                <div class="text-sm font-medium text-slate-600">Total Revenue</div>
+                <div class="text-3xl font-bold text-green-500 mt-2">₹12.5 Cr</div>
+                <div class="text-xs text-slate-500 mt-1">+15% vs last month</div>
+            </div>
+            
+            <div class="glass-card tilt-card p-6 rounded-lg">
+                <div class="text-sm font-medium text-slate-600">Missing GST</div>
+                <div class="text-3xl font-bold text-red-500 mt-2">₹2.3 Lk</div>
+                <div class="text-xs text-slate-500 mt-1">Pending validation</div>
+            </div>
+            
+            <div class="glass-card tilt-card p-6 rounded-lg">
+                <div class="text-sm font-medium text-slate-600">Matched</div>
+                <div class="text-3xl font-bold text-blue-500 mt-2">87%</div>
+                <div class="text-xs text-slate-500 mt-1">Success rate</div>
+            </div>
+        </div>
+        
+        <h2 class="text-2xl font-bold text-white mb-4">Buttons with Tilt Effect:</h2>
+        <div class="flex gap-4 flex-wrap mb-8">
+            <button class="tilt-btn bg-indigo-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-indigo-700 transition-colors">
+                Upload File
+            </button>
+            <button class="tilt-btn bg-green-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-700 transition-colors">
+                Validate Books
+            </button>
+            <button class="tilt-btn bg-slate-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-slate-700 transition-colors">
+                Export CSV
+            </button>
+        </div>
+        
+        <h2 class="text-2xl font-bold text-white mb-4">Product Cards:</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="glass-card tilt-card p-6 rounded-xl cursor-pointer hover:shadow-xl">
+                <h3 class="text-xl font-bold mb-2">📊 GST Dashboard</h3>
+                <p class="text-slate-600 mb-4">Comprehensive reconciliation with smart validation</p>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-slate-500">Click to open</span>
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </div>
+            </div>
+            
+            <div class="glass-card tilt-card p-6 rounded-xl cursor-pointer hover:shadow-xl">
+                <h3 class="text-xl font-bold mb-2">📝 Validate with Books</h3>
+                <p class="text-slate-600 mb-4">Fuzzy matching with improved accuracy</p>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-slate-500">Enhanced matching</span>
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 3D Tilt Parallax Utility
+        const tiltEffect = (function() {
+            const initTilt = (element) => {
+                if (!element || typeof element.addEventListener !== 'function') return;
+                
+                const maxRotation = 8;
+                
+                const handleMouseMove = (e) => {
+                    const rect = element.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    
+                    const centerX = rect.width / 2;
+                    const centerY = rect.height / 2;
+                    
+                    const rotateX = ((y - centerY) / centerY) * maxRotation;
+                    const rotateY = ((centerX - x) / centerX) * maxRotation;
+                    
+                    element.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.02)`;
+                };
+                
+                const handleMouseLeave = () => {
+                    element.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale(1)';
+                };
+                
+                element.addEventListener('mousemove', handleMouseMove);
+                element.addEventListener('mouseleave', handleMouseLeave);
+            };
+            
+            const autoInit = () => {
+                try {
+                    const tiltElements = document.querySelectorAll('.tilt-card, .tilt-btn');
+                    tiltElements.forEach(element => initTilt(element));
+                } catch (e) {
+                    console.warn('Tilt effect initialization failed (graceful degradation):', e);
+                }
+            };
+            
+            if (typeof document !== 'undefined') {
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', autoInit);
+                } else {
+                    autoInit();
+                }
+            }
+            
+            return { initTilt, autoInit };
+        })();
+    </script>
+</body>
+</html>
