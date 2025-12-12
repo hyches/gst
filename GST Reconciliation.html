@@ -1009,7 +1009,7 @@ const Icons = {
 };
 
 const Button = ({ variant = 'primary', children, icon, className, ...props }) => {
-  const baseClasses = 'inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+  const baseClasses = 'tilt-btn inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
   const variantClasses = {
     primary: 'bg-primary text-white hover:bg-primary-hover focus:ring-primary',
     secondary: 'bg-slate-600 text-white hover:bg-slate-700 focus:ring-slate-500',
@@ -1043,7 +1043,7 @@ const ProductCard = ({ title, description, icon, onClick, earlyAccess = false })
 
   return e('div', { 
       onClick,
-      className: 'relative bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 cursor-pointer hover:shadow-lg hover:border-primary/50 dark:hover:border-primary transition-all group overflow-hidden' 
+      className: 'glass-card tilt-card relative bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 cursor-pointer hover:shadow-lg hover:border-primary/50 dark:hover:border-primary transition-all group overflow-hidden' 
   },
       e(WavyBg, null),
       e('div', { className: 'relative z-10 flex flex-col h-full' },
@@ -1065,7 +1065,7 @@ const KpiCard = ({ title, value, subValue, icon, color, onClick }) => {
       green: 'text-green-500',
       default: 'text-slate-800 dark:text-slate-100'
   };
-  return e('div', { onClick, className: `bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md border border-slate-200 dark:border-slate-700 flex items-start ${onClick ? 'cursor-pointer hover:shadow-lg hover:border-primary/50 dark:hover:border-primary/50' : ''}` },
+  return e('div', { onClick, className: `glass-card tilt-card bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md border border-slate-200 dark:border-slate-700 flex items-start ${onClick ? 'cursor-pointer hover:shadow-lg hover:border-primary/50 dark:hover:border-primary/50' : ''}` },
       icon && e('div', { className: 'p-3 rounded-full mr-4 bg-primary-light dark:bg-primary/20' }, icon),
       e('div', null,
           e('div', { className: 'text-sm font-medium text-slate-500 dark:text-slate-400' }, title),
@@ -1661,23 +1661,7 @@ const ValidationPage = ({ allData, validationBooks, onValidateWithBooks }) => {
     const fileInputRef = React.useRef(null);
     
     const validationResults = React.useMemo(() => {
-        if (validationBooks.length === 0) return { matched: [], unmatched: [] };
-        const allBookRows = validationBooks.flatMap(book => {
-            return book.data.map(row => {
-                return {...row, 'Company Name': book.companyName}
-            });
-        });
-        
-        const mainDataLookup = new Map();
-        allData.forEach(row => {
-            if (row && typeof row.Type === 'string' && row.Type.startsWith('Missing_in_PR')) {
-                const key = `${row['Company Name']}|${row['Document Number (2B)']}|${row['Supplier GSTIN (2B)'] || ''}`;
-                mainDataLookup.set(key, row);
-            }
-        });
-
-        const matched = [];
-        const unmatched = [];
+        if (validationBooks.length === 0) return { matched: [], unmatched: [], stats: { totalBooks: 0, totalMissing: 0 } };
         
         const getCol = (row, candidates) => {
             for(const c of candidates) {
@@ -1685,30 +1669,93 @@ const ValidationPage = ({ allData, validationBooks, onValidateWithBooks }) => {
                 if(key) return row[key];
             }
             return null;
-        }
+        };
+        
+        const allBookRows = validationBooks.flatMap(book => {
+            return book.data.map(row => {
+                return {...row, 'Company Name': book.companyName}
+            });
+        });
+        
+        // Build lookup with normalized keys including fuzzy matching
+        const mainDataLookup = new Map();
+        const mainDataByDocNum = new Map(); // Fallback lookup without GSTIN
+        
+        allData.forEach(row => {
+            if (row && typeof row.Type === 'string' && row.Type.startsWith('Missing_in_PR')) {
+                const normalizedDocNum = String(row['Document Number (2B)'] || '').trim();
+                const normalizedGstin = String(row['Supplier GSTIN (2B)'] || '').trim();
+                
+                // Primary key with GSTIN
+                const key = `${row['Company Name']}|${normalizedDocNum}|${normalizedGstin}`;
+                mainDataLookup.set(key, row);
+                
+                // Secondary key without GSTIN for fuzzy matching
+                const keyWithoutGstin = `${row['Company Name']}|${normalizedDocNum}|`;
+                if (!mainDataByDocNum.has(keyWithoutGstin)) {
+                    mainDataByDocNum.set(keyWithoutGstin, row);
+                }
+            }
+        });
 
+        const matched = [];
+        const unmatched = [];
+        let unmatchedCounter = 0;
+        
         allBookRows.forEach(bookRow => {
-            const docNum = getCol(bookRow, ['Voucher Ref. No.', 'Document Number']);
-            const gstin = getCol(bookRow, ['GSTIN/UIN', 'GSTIN']);
-            const key = `${bookRow['Company Name']}|${docNum}|${gstin || ''}`;
+            const docNum = getCol(bookRow, ['Voucher Ref. No.', 'Document Number', 'Doc No', 'Invoice No']);
+            const gstin = getCol(bookRow, ['GSTIN/UIN', 'GSTIN', 'Supplier GSTIN']);
             
-            if (mainDataLookup.has(key)) {
-                matched.push(mainDataLookup.get(key));
-                mainDataLookup.delete(key);
+            const normalizedDocNum = String(docNum || '').trim();
+            const normalizedGstin = String(gstin || '').trim();
+            
+            // Try exact match first
+            let key = `${bookRow['Company Name']}|${normalizedDocNum}|${normalizedGstin}`;
+            let matchedRow = mainDataLookup.get(key);
+            let usedFallback = false;
+            
+            // If no exact match, try without GSTIN
+            if (!matchedRow && normalizedDocNum) {
+                key = `${bookRow['Company Name']}|${normalizedDocNum}|`;
+                matchedRow = mainDataByDocNum.get(key);
+                usedFallback = true;
+            }
+            
+            if (matchedRow) {
+                matched.push(matchedRow);
+                // Delete from the correct map based on which key was used
+                if (usedFallback) {
+                    mainDataByDocNum.delete(key);
+                } else {
+                    mainDataLookup.delete(key);
+                }
             } else {
+                unmatchedCounter++;
                 unmatched.push({
                     ...bookRow,
-                    id: `unmatched_${docNum}_${Math.random()}`,
-                    'Supplier Name': getCol(bookRow, ['Party Name']),
-                    'Document Number (2B)': docNum,
-                    'Document Date (2B)': getCol(bookRow, ['Voucher Date']),
+                    id: `unmatched_${normalizedDocNum}_${unmatchedCounter}`,
+                    'Supplier Name': getCol(bookRow, ['Party Name', 'Supplier Name']),
+                    'Document Number (2B)': normalizedDocNum,
+                    'Document Date (2B)': getCol(bookRow, ['Voucher Date', 'Document Date']),
                     'Sum of Taxable Value (2B)': getCol(bookRow, ['Taxable Value']),
-                    'Total GST': getCol(bookRow, ['Total Tax']),
-                    Remarks: 'Unmatched'
+                    'Total GST': getCol(bookRow, ['Total Tax', 'GST Amount']),
+                    Remarks: 'Not found in Missing_in_PR transactions'
                 });
             }
         });
-        return { matched, unmatched };
+        
+        const totalMissing = allData.filter(row => row && typeof row.Type === 'string' && row.Type.startsWith('Missing_in_PR')).length;
+        
+        return { 
+            matched, 
+            unmatched, 
+            stats: { 
+                totalBooks: allBookRows.length, 
+                totalMissing,
+                matchedCount: matched.length,
+                unmatchedCount: unmatched.length
+            } 
+        };
     }, [validationBooks, allData]);
 
     const columns = [
@@ -1722,19 +1769,40 @@ const ValidationPage = ({ allData, validationBooks, onValidateWithBooks }) => {
     ];
     
     return e('div', { className: 'space-y-6' },
-        e('div', { className: 'bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md border dark:border-slate-700' },
+        e('div', { className: 'glass-card bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md border dark:border-slate-700' },
             e('h2', { className: 'text-lg font-semibold dark:text-slate-100' }, "Upload Books File"),
             e('p', { className: 'text-sm text-slate-600 dark:text-slate-400 mt-1 mb-4' }, "Filename must be 'Books_CompanyName.xlsx'. This will find matches and auto-mark them as 'Accounted'."),
-            e('input', { type: 'file', ref: fileInputRef, className: 'hidden', onChange: (e) => e.target.files[0] && onValidateWithBooks(e.target.files[0]) }),
+            e('input', { type: 'file', ref: fileInputRef, className: 'hidden', accept: '.xlsx,.xls', onChange: (e) => e.target.files[0] && onValidateWithBooks(e.target.files[0]) }),
             e(Button, { onClick: () => fileInputRef.current.click() }, "Upload 'Books' Excel File")
+        ),
+        validationBooks.length > 0 && e('div', { className: 'glass-card bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md border dark:border-slate-700' },
+            e('h3', { className: 'text-md font-semibold dark:text-slate-100 mb-3' }, 'Validation Statistics'),
+            e('div', { className: 'grid grid-cols-2 md:grid-cols-4 gap-4' },
+                e('div', { className: 'text-center' },
+                    e('div', { className: 'text-2xl font-bold text-blue-500' }, validationResults.stats.totalBooks),
+                    e('div', { className: 'text-sm text-slate-600 dark:text-slate-400' }, 'Books Entries')
+                ),
+                e('div', { className: 'text-center' },
+                    e('div', { className: 'text-2xl font-bold text-yellow-500' }, validationResults.stats.totalMissing),
+                    e('div', { className: 'text-sm text-slate-600 dark:text-slate-400' }, 'Missing in PR')
+                ),
+                e('div', { className: 'text-center' },
+                    e('div', { className: 'text-2xl font-bold text-green-500' }, validationResults.stats.matchedCount),
+                    e('div', { className: 'text-sm text-slate-600 dark:text-slate-400' }, 'Matched')
+                ),
+                e('div', { className: 'text-center' },
+                    e('div', { className: 'text-2xl font-bold text-red-500' }, validationResults.stats.unmatchedCount),
+                    e('div', { className: 'text-sm text-slate-600 dark:text-slate-400' }, 'Unmatched')
+                )
+            )
         ),
         e('div', { className: 'grid grid-cols-1 lg:grid-cols-2 gap-6' },
             e('div', null, 
-                e('h2', { className: 'text-xl font-bold text-success mb-2' }, 'Matched Transactions'),
+                e('h2', { className: 'text-xl font-bold text-success mb-2' }, `Matched Transactions (${validationResults.matched.length})`),
                 e(DataTable, { columns, data: validationResults.matched, selectedRows: [], onSelectionChange: () => {} })
             ),
             e('div', null,
-                e('h2', { className: 'text-xl font-bold text-danger mb-2' }, 'Unmatched Transactions'),
+                e('h2', { className: 'text-xl font-bold text-danger mb-2' }, `Unmatched Transactions (${validationResults.unmatched.length})`),
                 e(DataTable, { columns, data: validationResults.unmatched, selectedRows: [], onSelectionChange: () => {} })
             )
         )
@@ -2761,34 +2829,73 @@ const App = function() {
 
           // Find matches and update actions
           const bookRowsLookup = new Map();
+          const getCol = (r, candidates) => {
+            for(const c of candidates) {
+                const key = Object.keys(r).find(k => k.trim().toLowerCase() === c.toLowerCase());
+                if(key) return r[key];
+            }
+            return null;
+          };
+          
+          // Build lookup with normalized keys
           book.data.forEach(row => {
-              const getCol = (r, candidates) => {
-                for(const c of candidates) {
-                    const key = Object.keys(r).find(k => k.trim().toLowerCase() === c.toLowerCase());
-                    if(key) return r[key];
-                }
-                return null;
+              const docNum = getCol(row, ['Voucher Ref. No.', 'Document Number', 'Doc No', 'Invoice No']);
+              const gstin = getCol(row, ['GSTIN/UIN', 'GSTIN', 'Supplier GSTIN']);
+              
+              // Normalize values - trim whitespace and convert to string
+              const normalizedDocNum = String(docNum || '').trim();
+              const normalizedGstin = String(gstin || '').trim();
+              
+              if (normalizedDocNum) {
+                  const key = `${book.companyName}|${normalizedDocNum}|${normalizedGstin}`;
+                  bookRowsLookup.set(key, row);
+                  
+                  // Also add key without GSTIN for fuzzy matching
+                  const keyWithoutGstin = `${book.companyName}|${normalizedDocNum}|`;
+                  if (!bookRowsLookup.has(keyWithoutGstin)) {
+                      bookRowsLookup.set(keyWithoutGstin, row);
+                  }
               }
-              const docNum = getCol(row, ['Voucher Ref. No.', 'Document Number']);
-              const gstin = getCol(row, ['GSTIN/UIN', 'GSTIN']);
-              const key = `${book.companyName}|${docNum}|${gstin || ''}`;
-              bookRowsLookup.set(key, row);
           });
           
           const newActionState = {...appState.actionState};
           let matchCount = 0;
+          let totalCandidates = 0;
+          
           appState.allData.forEach(row => {
               if (row && typeof row.Type === 'string' && row.Type.startsWith('Missing_in_PR')) {
-                  const key = `${row['Company Name']}|${row['Document Number (2B)']}|${row['Supplier GSTIN (2B)'] || ''}`;
-                  if (bookRowsLookup.has(key)) {
+                  totalCandidates++;
+                  
+                  // Normalize main data values
+                  const normalizedDocNum = String(row['Document Number (2B)'] || '').trim();
+                  const normalizedGstin = String(row['Supplier GSTIN (2B)'] || '').trim();
+                  
+                  // Try exact match first
+                  let key = `${row['Company Name']}|${normalizedDocNum}|${normalizedGstin}`;
+                  let matched = bookRowsLookup.has(key);
+                  
+                  // If no exact match, try without GSTIN
+                  if (!matched && normalizedDocNum) {
+                      key = `${row['Company Name']}|${normalizedDocNum}|`;
+                      matched = bookRowsLookup.has(key);
+                  }
+                  
+                  if (matched) {
                       matchCount++;
                       const current = newActionState[row.id] || {};
                       newActionState[row.id] = typeof current === 'object' ? { ...current, action: 'Accounted' } : { action: 'Accounted' };
                   }
               }
           });
+          
           updateState({ actionState: newActionState });
-          alert(`${matchCount} matches found and marked as 'Accounted'.`);
+          
+          const message = `Validation Complete:\n` +
+                         `- Total Missing_in_PR transactions: ${totalCandidates}\n` +
+                         `- Matches found: ${matchCount}\n` +
+                         `- Unmatched: ${totalCandidates - matchCount}\n\n` +
+                         `Matched transactions have been marked as 'Accounted'.`;
+          alert(message);
 
       } catch (error) {
           alert(`Error processing Books file: ${error.message}`);
