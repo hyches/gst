@@ -716,6 +716,8 @@ const fileProcessor = (function() {
             reader.readAsArrayBuffer(file);
           });
         },
+        processBooksFile: function(file) {
+            return new Promise((resolve, reject) => {
                 const companyNameMatch = file.name.match(/Books_([^_]+)\.xlsx?/i);
                 if (!companyNameMatch || !companyNameMatch[1]) {
                     return reject(new Error("Books filename must be in the format 'Books_CompanyName.xlsx'"));
