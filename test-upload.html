@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Excel Upload - No Worker</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        #drop-zone {
+            border: 3px dashed #ccc;
+            border-radius: 10px;
+            padding: 50px;
+            text-align: center;
+            margin: 20px 0;
+            cursor: pointer;
+        }
+        #drop-zone.drag-over {
+            border-color: #4F46E5;
+            background-color: #EEF2FF;
+        }
+        button {
+            background-color: #4F46E5;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #4338CA;
+        }
+        #status {
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        #status.success {
+            background-color: #D1FAE5;
+            color: #065F46;
+        }
+        #status.error {
+            background-color: #FEE2E2;
+            color: #991B1B;
+        }
+        #preview {
+            margin-top: 20px;
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #4F46E5;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Excel Upload (No Worker)</h1>
+    <p>This test page verifies that Excel parsing works without web workers.</p>
+    
+    <div id="drop-zone">
+        <p>📁 Drag & drop an Excel file here or click to browse</p>
+        <button onclick="document.getElementById('fileInput').click()">Select File</button>
+    </div>
+    
+    <input type="file" id="fileInput" accept=".xlsx,.xls" style="display: none;">
+    
+    <div id="status"></div>
+    <div id="preview"></div>
+    
+    <script>
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('fileInput');
+        const statusDiv = document.getElementById('status');
+        const previewDiv = document.getElementById('preview');
+        
+        // Drag and drop handlers
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+        
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('drag-over');
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            
+            if (e.dataTransfer.files.length > 0) {
+                processFile(e.dataTransfer.files[0]);
+            }
+        });
+        
+        dropZone.addEventListener('click', () => {
+            fileInput.click();
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                processFile(e.target.files[0]);
+            }
+        });
+        
+        function processFile(file) {
+            statusDiv.textContent = 'Processing file...';
+            statusDiv.className = '';
+            previewDiv.innerHTML = '';
+            
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                try {
+                    // This is the critical test - parsing without worker
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                    
+                    // Get the first sheet
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { raw: false, defval: null });
+                    
+                    // Success!
+                    statusDiv.textContent = `✅ Success! Loaded ${jsonData.length} rows from sheet "${firstSheetName}" (No worker errors!)`;
+                    statusDiv.className = 'success';
+                    
+                    // Show preview of first 25 rows
+                    showPreview(jsonData.slice(0, 25), firstSheetName);
+                    
+                } catch (error) {
+                    statusDiv.textContent = `❌ Error: ${error.message}`;
+                    statusDiv.className = 'error';
+                    console.error('Parsing error:', error);
+                }
+            };
+            
+            reader.onerror = function(error) {
+                statusDiv.textContent = `❌ File read error: ${error}`;
+                statusDiv.className = 'error';
+            };
+            
+            reader.readAsArrayBuffer(file);
+        }
+        
+        function showPreview(data, sheetName) {
+            if (data.length === 0) {
+                previewDiv.innerHTML = '<p>No data to preview.</p>';
+                return;
+            }
+            
+            const keys = Object.keys(data[0]);
+            let html = `<h3>Preview of "${sheetName}" (First 25 rows):</h3><table><thead><tr>`;
+            
+            // Header
+            keys.forEach(key => {
+                html += `<th>${key}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+            
+            // Rows
+            data.forEach(row => {
+                html += '<tr>';
+                keys.forEach(key => {
+                    html += `<td>${row[key] !== null && row[key] !== undefined ? row[key] : ''}</td>`;
+                });
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table>';
+            previewDiv.innerHTML = html;
+        }
+        
+        // Test if XLSX is loaded
+        if (typeof XLSX !== 'undefined') {
+            console.log('✅ SheetJS (XLSX) library loaded successfully');
+        } else {
+            statusDiv.textContent = '❌ SheetJS library not loaded. Check internet connection.';
+            statusDiv.className = 'error';
+        }
+    </script>
+</body>
+</html>

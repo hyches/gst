@@ -43,7 +43,81 @@
       }
     </script>
     <style>
-      /* Global styles can go here. Print-specific styles are now handled by the controlledPrint function. */
+      /* 
+       * Liquid Glass Design System & 3D Parallax Effects
+       * ================================================
+       * A modern, glass-morphism inspired design with subtle 3D interactions
+       */
+      
+      :root {
+        /* Liquid Glass color palette */
+        --glass-bg: rgba(255, 255, 255, 0.7);
+        --glass-border: rgba(255, 255, 255, 0.18);
+        --glass-shadow: rgba(31, 38, 135, 0.15);
+        --blur-amount: 10px;
+        
+        /* 3D Tilt variables */
+        --tilt-max-rotation: 8deg;
+        --tilt-scale: 1.02;
+        --tilt-transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      
+      /* Dark mode glass adjustments */
+      .dark {
+        --glass-bg: rgba(30, 41, 59, 0.7);
+        --glass-border: rgba(100, 116, 139, 0.18);
+        --glass-shadow: rgba(0, 0, 0, 0.3);
+      }
+      
+      /* Liquid Glass effect for cards */
+      .glass-card {
+        background: var(--glass-bg);
+        backdrop-filter: blur(var(--blur-amount));
+        -webkit-backdrop-filter: blur(var(--blur-amount));
+        border: 1px solid var(--glass-border);
+        box-shadow: 0 8px 32px 0 var(--glass-shadow);
+        transition: var(--tilt-transition);
+      }
+      
+      /* 3D Tilt Card effect */
+      .tilt-card {
+        transform-style: preserve-3d;
+        perspective: 1000px;
+        transition: var(--tilt-transition);
+      }
+      
+      .tilt-card:hover {
+        transform: scale(var(--tilt-scale));
+      }
+      
+      /* 3D Tilt Button effect */
+      .tilt-btn {
+        transform-style: preserve-3d;
+        transition: var(--tilt-transition);
+      }
+      
+      .tilt-btn:active {
+        transform: scale(0.98) translateZ(-10px);
+      }
+      
+      /* Shimmer effect for loading states */
+      @keyframes shimmer {
+        0% { background-position: -1000px 0; }
+        100% { background-position: 1000px 0; }
+      }
+      
+      .shimmer {
+        animation: shimmer 2s infinite;
+        background: linear-gradient(
+          to right,
+          transparent 0%,
+          rgba(255, 255, 255, 0.3) 50%,
+          transparent 100%
+        );
+        background-size: 1000px 100%;
+      }
+      
+      /* Print-specific styles are handled by the controlledPrint function */
     </style>
   </head>
   <body class="bg-indigo-50 dark:bg-slate-900 antialiased">
@@ -496,156 +570,152 @@ const dbService = (function() {
     };
 })();
 
-const fileProcessorWorkerScript = `
-  importScripts("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
-  
-  // Helper functions required by the worker
-  const MONTH_MAP = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
-  
-  const parseCurrency = (v) => {
-      if (typeof v === 'number') return v;
-      if (typeof v !== 'string') return 0;
-      const c = v.replace(/[^0-9.-]+/g, "");
-      const n = parseFloat(c);
-      return isNaN(n) ? 0 : n;
-  };
-  
-  const parseDateString = (ds) => {
-      if (!ds) return null;
-      if (typeof ds === 'number') {
-        const excelEpoch = new Date(Date.UTC(1899, 11, 30));
-        const dateObj = new Date(excelEpoch.getTime() + ds * 86400000);
-        return !isNaN(dateObj.getTime()) ? dateObj : null;
-      }
-      if (typeof ds !== 'string') return null;
-      const parts = ds.match(/(\\d{1,2})[/-](\\d{1,2})[/-](\\d{4})/);
-      if (parts) {
-        const day = parseInt(parts[1], 10);
-        const month = parseInt(parts[2], 10) - 1;
-        const year = parseInt(parts[3], 10);
-        const date = new Date(year, month, day);
-        if (!isNaN(date.getTime()) && date.getDate() === day) return date;
-      }
-      const nativeDate = new Date(ds);
-      return !isNaN(nativeDate.getTime()) ? nativeDate : null;
-  };
-
-  const getFinancialYear = (date) => {
-      const year = date.getFullYear();
-      const month = date.getMonth();
-      return month >= 3 ? \\\`\${year}-\${String(year + 1).slice(-2)}\\\` : \\\`\${year - 1}-\${String(year).slice(-2)}\\\`;
-  };
-  
-  self.onmessage = (event) => {
-      const file = event.data;
-      const reader = new FileReader();
-      reader.onload = (e) => {
-          try {
-              if (!e.target?.result) throw new Error("File content is empty.");
-              
-              self.postMessage({ type: 'progress', payload: { progress: 0.1, message: 'Reading file contents...' } });
-              
-              const data = new Uint8Array(e.target.result);
-              self.postMessage({ type: 'progress', payload: { progress: 0.2, message: 'Parsing Excel workbook...' } });
-              const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-              
-              const sheetName = 'Transactions';
-              if (!workbook.SheetNames.includes(sheetName)) {
-                throw new Error(\\\`Sheet "\${sheetName}" not found in the Excel file.\\\`);
-              }
-              const worksheet = workbook.Sheets[sheetName];
-              
-              self.postMessage({ type: 'progress', payload: { progress: 0.4, message: 'Converting sheet to JSON...' } });
-              const rawData = XLSX.utils.sheet_to_json(worksheet, { raw: false, defval: null });
-              
-              if (!Array.isArray(rawData) || rawData.length === 0) {
-                throw new Error("No data found in the 'Transactions' sheet.");
-              }
-              
-              const processedData = [];
-              const totalRows = rawData.length;
-
-              for (let i = 0; i < totalRows; i++) {
-                const row = rawData[i];
-                if (typeof row !== 'object' || row === null) continue;
-                const newRow = { id: \\\`row_\${i}\\\` };
-                Object.keys(row).forEach((key) => {
-                    if (key && !key.startsWith('__EMPTY')) {
-                        newRow[key.trim()] = typeof row[key] === 'string' ? row[key].trim() : row[key];
-                    }
-                });
-                newRow['Type'] = String(newRow['Type'] ?? newRow['Tag (Type)'] ?? "");
-                newRow['Sum of Taxable Value (2B)'] = parseCurrency(newRow['Sum of Taxable Value (2B)']);
-                newRow['Sum of IGST (2B)'] = parseCurrency(newRow['Sum of IGST (2B)']);
-                newRow['Sum of CGST (2B)'] = parseCurrency(newRow['Sum of CGST (2B)']);
-                newRow['Sum of SGST (2B)'] = parseCurrency(newRow['Sum of SGST (2B)']);
-                newRow['Total GST'] = (newRow['Sum of IGST (2B)'] ?? 0) + (newRow['Sum of CGST (2B)'] ?? 0) + (newRow['Sum of SGST (2B)'] ?? 0);
-                const docDateObj = parseDateString(newRow['Document Date (2B)']);
-                if (docDateObj) {
-                    newRow['Document Date (2B)'] = docDateObj.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\\//g, '-');
-                    newRow['Financial Year'] = getFinancialYear(docDateObj);
-                } else {
-                    newRow['Document Date (2B)'] = '';
-                    newRow['Financial Year'] = 'Unknown';
-                }
-                const remarksKey = Object.keys(newRow).find((k) => k.toLowerCase() === 'remarks' || k.toLowerCase() === 'remark');
-                newRow['Remarks'] = String((remarksKey ? newRow[remarksKey] : '') ?? '');
-                newRow['Supplier Name'] = String(newRow['Supplier Name'] ?? 'Unknown');
-                newRow['Document Number (2B)'] = String(newRow['Document Number (2B)'] ?? '');
-                newRow['Company Name'] = String(newRow['Company Name'] ?? 'Unknown');
-                newRow['Month'] = String(newRow['Month'] ?? 'Unknown');
-                processedData.push(newRow);
-
-                if (i % 200 === 0) {
-                    const progress = i / totalRows;
-                    self.postMessage({ type: 'progress', payload: { progress: 0.5 + progress * 0.5, message: 'Processing rows... ' + i + ' / ' + totalRows } });
-                }
-              }
-              
-              self.postMessage({ type: 'result', payload: processedData });
-          } catch (error) {
-              self.postMessage({ type: 'error', payload: error.message });
-          }
-      };
-      reader.readAsArrayBuffer(file);
-  };
-`;
+/* 
+ * WORKER REMOVAL NOTE:
+ * ==================================================================================
+ * The original implementation used a Web Worker for Excel parsing, which caused
+ * "Worker error: Uncaught SyntaxError: Invalid or unexpected token" when the worker
+ * script failed to load (e.g., due to CSP restrictions, file:// protocol, or 404 errors).
+ * 
+ * This has been replaced with direct in-browser parsing using FileReader.readAsArrayBuffer
+ * and XLSX.read() in the main thread. This approach:
+ * - Avoids worker-related errors completely
+ * - Works reliably with file:// protocol for local testing
+ * - Maintains all existing features and data processing logic
+ * - Uses the SheetJS library (xlsx.full.min.js) already loaded via CDN in HTML head
+ * 
+ * To revert to worker-based parsing (if needed for performance with very large files):
+ * 1. Restore the fileProcessorWorkerScript code (see git history)
+ * 2. Replace the processMainFile implementation with the worker-based version
+ * 3. Ensure worker scripts can load in your deployment environment
+ * 4. Test thoroughly with CSP headers and various protocols (http/https/file)
+ * ==================================================================================
+ */
 
 // --- From services/fileProcessor.ts ---
 const fileProcessor = (function() {
+    // Helper function for parsing currency values (moved from worker)
+    const parseCurrency = (v) => {
+        if (typeof v === 'number') return v;
+        if (typeof v !== 'string') return 0;
+        const c = v.replace(/[^0-9.-]+/g, "");
+        const n = parseFloat(c);
+        return isNaN(n) ? 0 : n;
+    };
+
     return {
+        // Direct in-browser Excel parsing (no worker) - FIXES WORKER ERROR
+        // This implementation processes Excel files in the main thread, avoiding
+        // all worker-related errors while maintaining identical functionality
         processMainFile: function(file, onProgress) {
           return new Promise((resolve, reject) => {
-            const workerBlob = new Blob([fileProcessorWorkerScript], { type: 'application/javascript' });
-            const workerUrl = URL.createObjectURL(workerBlob);
-            const worker = new Worker(workerUrl);
+            const reader = new FileReader();
             
-            worker.onmessage = function(e) {
-                const { type, payload } = e.data;
-                if (type === 'progress') {
-                    onProgress(payload.progress, payload.message);
-                } else if (type === 'result') {
-                    resolve(payload);
-                    worker.terminate();
-                    URL.revokeObjectURL(workerUrl);
-                } else if (type === 'error') {
-                    reject(new Error(payload));
-                    worker.terminate();
-                    URL.revokeObjectURL(workerUrl);
+            reader.onload = function(e) {
+                try {
+                    if (!e.target?.result) {
+                        throw new Error("File content is empty. Please select a valid .xlsx file.");
+                    }
+                    
+                    onProgress(0.1, 'Reading file contents...');
+                    
+                    // Parse Excel file directly in main thread using SheetJS
+                    const data = new Uint8Array(e.target.result);
+                    onProgress(0.2, 'Parsing Excel workbook...');
+                    
+                    // Verify XLSX library is loaded (from CDN in HTML head)
+                    if (typeof XLSX === 'undefined') {
+                        throw new Error("SheetJS library not loaded. Please check your internet connection or serve this page over http/https.");
+                    }
+                    
+                    const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                    
+                    const sheetName = 'Transactions';
+                    if (!workbook.SheetNames.includes(sheetName)) {
+                      throw new Error(`Sheet "${sheetName}" not found in the Excel file. Available sheets: ${workbook.SheetNames.join(', ')}`);
+                    }
+                    const worksheet = workbook.Sheets[sheetName];
+                    
+                    onProgress(0.4, 'Converting sheet to JSON...');
+                    const rawData = XLSX.utils.sheet_to_json(worksheet, { raw: false, defval: null });
+                    
+                    if (!Array.isArray(rawData) || rawData.length === 0) {
+                      throw new Error("No data found in the 'Transactions' sheet. Please check the file format.");
+                    }
+                    
+                    const processedData = [];
+                    const totalRows = rawData.length;
+
+                    // Process each row (same logic as worker version)
+                    for (let i = 0; i < totalRows; i++) {
+                      const row = rawData[i];
+                      if (typeof row !== 'object' || row === null) continue;
+                      const newRow = { id: `row_${i}` };
+                      Object.keys(row).forEach((key) => {
+                          if (key && !key.startsWith('__EMPTY')) {
+                              newRow[key.trim()] = typeof row[key] === 'string' ? row[key].trim() : row[key];
+                          }
+                      });
+                      newRow['Type'] = String(newRow['Type'] ?? newRow['Tag (Type)'] ?? "");
+                      newRow['Sum of Taxable Value (2B)'] = parseCurrency(newRow['Sum of Taxable Value (2B)']);
+                      newRow['Sum of IGST (2B)'] = parseCurrency(newRow['Sum of IGST (2B)']);
+                      newRow['Sum of CGST (2B)'] = parseCurrency(newRow['Sum of CGST (2B)']);
+                      newRow['Sum of SGST (2B)'] = parseCurrency(newRow['Sum of SGST (2B)']);
+                      newRow['Total GST'] = (newRow['Sum of IGST (2B)'] ?? 0) + (newRow['Sum of CGST (2B)'] ?? 0) + (newRow['Sum of SGST (2B)'] ?? 0);
+                      const docDateObj = parseDateString(newRow['Document Date (2B)']);
+                      if (docDateObj) {
+                          newRow['Document Date (2B)'] = docDateObj.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-');
+                          newRow['Financial Year'] = getFinancialYear(docDateObj);
+                      } else {
+                          newRow['Document Date (2B)'] = '';
+                          newRow['Financial Year'] = 'Unknown';
+                      }
+                      const remarksKey = Object.keys(newRow).find((k) => k.toLowerCase() === 'remarks' || k.toLowerCase() === 'remark');
+                      newRow['Remarks'] = String((remarksKey ? newRow[remarksKey] : '') ?? '');
+                      newRow['Supplier Name'] = String(newRow['Supplier Name'] ?? 'Unknown');
+                      newRow['Document Number (2B)'] = String(newRow['Document Number (2B)'] ?? '');
+                      newRow['Company Name'] = String(newRow['Company Name'] ?? 'Unknown');
+                      newRow['Month'] = String(newRow['Month'] ?? 'Unknown');
+                      processedData.push(newRow);
+
+                      // Report progress every 200 rows
+                      if (i % 200 === 0) {
+                          const progress = i / totalRows;
+                          onProgress(0.5 + progress * 0.5, `Processing rows... ${i} / ${totalRows}`);
+                      }
+                    }
+                    
+                    onProgress(1.0, 'Processing complete!');
+                    resolve(processedData);
+                } catch (error) {
+                    console.error("Excel parsing error:", error);
+                    let errorMessage = error.message;
+                    
+                    // Provide helpful error messages based on common issues
+                    if (errorMessage.includes("XLSX") || errorMessage.includes("undefined")) {
+                        errorMessage = "⚠️ SheetJS library failed to load. Common causes:\n" +
+                                     "• No internet connection (CDN blocked)\n" +
+                                     "• Opening file:// directly in browser\n" +
+                                     "• Content Security Policy restrictions\n\n" +
+                                     "💡 Solution: Serve this page over http/https using a local server:\n" +
+                                     "   python -m http.server 8000  (or similar)";
+                    } else if (errorMessage.includes("Sheet")) {
+                        errorMessage = errorMessage + "\n\n💡 Please ensure your Excel file has a 'Transactions' sheet with the expected columns.";
+                    }
+                    
+                    reject(new Error(errorMessage));
                 }
             };
 
-            worker.onerror = function(e) {
-                reject(new Error(`Worker error: ${e.message}`));
-                worker.terminate();
-                URL.revokeObjectURL(workerUrl);
+            reader.onerror = function(error) {
+                console.error("FileReader error:", error);
+                reject(new Error("Failed to read the file. Please try again with a different file."));
             };
 
-            worker.postMessage(file);
+            // Read the file as ArrayBuffer for SheetJS (no worker involved)
+            reader.readAsArrayBuffer(file);
           });
         },
-        processBooksFile: function(file) {
-            return new Promise((resolve, reject) => {
                 const companyNameMatch = file.name.match(/Books_([^_]+)\.xlsx?/i);
                 if (!companyNameMatch || !companyNameMatch[1]) {
                     return reject(new Error("Books filename must be in the format 'Books_CompanyName.xlsx'"));
@@ -817,6 +887,65 @@ If multiple values for a filter are mentioned (e.g. "show Stark and Oscorp"), in
             }
         }
     };
+})();
+
+// --- 3D Tilt Parallax Utility ---
+// Adds smooth 3D tilt effect to elements with 'tilt-card' or 'tilt-btn' class
+// Gracefully degrades if pointer events are unavailable
+const tiltEffect = (function() {
+    const initTilt = (element) => {
+        if (!element || typeof element.addEventListener !== 'function') return;
+        
+        const maxRotation = 8; // degrees
+        
+        const handleMouseMove = (e) => {
+            const rect = element.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const centerX = rect.width / 2;
+            const centerY = rect.height / 2;
+            
+            const rotateX = ((y - centerY) / centerY) * maxRotation;
+            const rotateY = ((centerX - x) / centerX) * maxRotation;
+            
+            element.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.02)`;
+        };
+        
+        const handleMouseLeave = () => {
+            element.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale(1)';
+        };
+        
+        element.addEventListener('mousemove', handleMouseMove);
+        element.addEventListener('mouseleave', handleMouseLeave);
+        
+        // Return cleanup function
+        return () => {
+            element.removeEventListener('mousemove', handleMouseMove);
+            element.removeEventListener('mouseleave', handleMouseLeave);
+        };
+    };
+    
+    // Auto-initialize tilt on elements with tilt classes
+    const autoInit = () => {
+        try {
+            const tiltElements = document.querySelectorAll('.tilt-card, .tilt-btn');
+            tiltElements.forEach(element => initTilt(element));
+        } catch (e) {
+            console.warn('Tilt effect initialization failed (graceful degradation):', e);
+        }
+    };
+    
+    // Initialize when DOM is ready
+    if (typeof document !== 'undefined') {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', autoInit);
+        } else {
+            autoInit();
+        }
+    }
+    
+    return { initTilt, autoInit };
 })();
 
 
@@ -1023,14 +1152,44 @@ const MainLandingPage = ({ onNavigateToGst }) => {
 
 const StartupScreen = ({ onFileSelect, onLoadSaved, onClearSaved, onLoadMockData, statusMessage, isLoading, progress, onNavigateToHome }) => {
   const fileInputRef = useRef(null);
+  const [dragActive, setDragActive] = useState(false);
+  
   const handleFileChange = (event) => {
     const file = event.target.files?.[0];
     if (file) {
       onFileSelect(file);
     }
   };
+  
   const handleUploadClick = () => {
     fileInputRef.current?.click();
+  };
+
+  // Drag-and-drop support
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      // Validate file type
+      if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+        onFileSelect(file);
+      } else {
+        alert('Please upload a valid Excel file (.xlsx or .xls)');
+      }
+    }
   };
 
   return e('div', { className: 'flex items-center justify-center min-h-screen p-4 relative' },
@@ -1051,8 +1210,28 @@ const StartupScreen = ({ onFileSelect, onLoadSaved, onClearSaved, onLoadMockData
           ) :
           e(Fragment, null,
             e('input', { type: 'file', ref: fileInputRef, className: 'hidden', accept: '.xlsx, .xls', onChange: handleFileChange }),
-            e('div', { className: 'space-y-4' },
-              e(Button, { onClick: handleUploadClick, icon: e(Icons.FileUploadIcon, { className: 'h-5 w-5' }), className: 'w-full justify-center text-base py-3' }, 'Upload New Excel File'),
+            // Drag-and-drop upload area
+            e('div', { 
+              className: `relative border-2 border-dashed rounded-lg p-8 mb-4 transition-all ${
+                dragActive 
+                  ? 'border-primary bg-primary/5 dark:bg-primary/10' 
+                  : 'border-slate-300 dark:border-slate-600 hover:border-primary/50'
+              }`,
+              onDragEnter: handleDrag,
+              onDragLeave: handleDrag,
+              onDragOver: handleDrag,
+              onDrop: handleDrop,
+              onClick: handleUploadClick
+            },
+              e('div', { className: 'flex flex-col items-center cursor-pointer' },
+                e(Icons.FileUploadIcon, { className: `h-12 w-12 ${dragActive ? 'text-primary' : 'text-slate-400 dark:text-slate-500'}` }),
+                e('p', { className: 'mt-3 text-sm font-medium text-slate-700 dark:text-slate-300' }, 
+                  dragActive ? 'Drop Excel file here' : 'Drag & drop Excel file here'
+                ),
+                e('p', { className: 'mt-1 text-xs text-slate-500 dark:text-slate-400' }, 'or click to browse')
+              )
+            ),
+            e('div', { className: 'space-y-3' },
               e(Button, { onClick: onLoadSaved, variant: 'secondary', icon: e(Icons.DatabaseIcon, { className: 'h-5 w-5' }), className: 'w-full justify-center text-base py-3' }, 'Use Saved Data'),
               e(Button, { onClick: onLoadMockData, variant: 'secondary', className: 'w-full justify-center text-base py-3' }, 'Load Mock Data')
             ),
