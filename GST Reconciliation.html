@@ -14,7 +14,7 @@
     <script>
       pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js`;
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/@google/generative-ai/dist/index.min.js"></script>
+    <!-- Gemini AI: Disabled due to CommonJS exports error in browser. Use server-side proxy instead. -->
     <script>
       tailwind.config = {
         darkMode: 'class',
@@ -43,64 +43,454 @@
       }
     </script>
     <style>
-      /* 
-       * Liquid Glass Design System & 3D Parallax Effects
-       * ================================================
-       * A modern, glass-morphism inspired design with subtle 3D interactions
+      /* ══════════════════════════════════════════════════════════════════════
+       * PROFESSIONAL BUSINESS DASHBOARD - DESIGN SYSTEM
+       * ══════════════════════════════════════════════════════════════════════
+       * Clean, modern, professional design inspired by enterprise SaaS dashboards
        */
       
+      * {
+        box-sizing: border-box;
+      }
+      
       :root {
-        /* Liquid Glass color palette */
-        --glass-bg: rgba(255, 255, 255, 0.7);
-        --glass-border: rgba(255, 255, 255, 0.18);
-        --glass-shadow: rgba(31, 38, 135, 0.15);
-        --blur-amount: 10px;
+        /* ─── Professional Color Palette ─── */
+        --primary-50: #EEF2FF;
+        --primary-100: #E0E7FF;
+        --primary-200: #C7D2FE;
+        --primary-500: #6366F1;
+        --primary-600: #4F46E5;
+        --primary-700: #4338CA;
+        --primary-900: #312E81;
         
-        /* 3D Tilt variables */
-        --tilt-max-rotation: 8deg;
-        --tilt-scale: 1.02;
-        --tilt-transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+        --gray-50: #F9FAFB;
+        --gray-100: #F3F4F6;
+        --gray-200: #E5E7EB;
+        --gray-300: #D1D5DB;
+        --gray-400: #9CA3AF;
+        --gray-500: #6B7280;
+        --gray-600: #4B5563;
+        --gray-700: #374151;
+        --gray-800: #1F2937;
+        --gray-900: #111827;
+        
+        --success: #10B981;
+        --success-light: #D1FAE5;
+        --warning: #F59E0B;
+        --warning-light: #FEF3C7;
+        --danger: #EF4444;
+        --danger-light: #FEE2E2;
+        --info: #3B82F6;
+        --info-light: #DBEAFE;
+        
+        /* ─── Background Colors ─── */
+        --bg-primary: #FFFFFF;
+        --bg-secondary: #F9FAFB;
+        --bg-tertiary: #F3F4F6;
+        
+        /* ─── Border & Shadows ─── */
+        --border-color: #E5E7EB;
+        --border-color-strong: #D1D5DB;
+        
+        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        
+        /* ─── Typography ─── */
+        --font-heading: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', sans-serif;
+        --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', sans-serif;
+        
+        /* ─── Spacing ─── */
+        --space-xs: 0.25rem;
+        --space-sm: 0.5rem;
+        --space-md: 1rem;
+        --space-lg: 1.5rem;
+        --space-xl: 2rem;
+        --space-2xl: 3rem;
+        
+        /* ─── Border Radius ─── */
+        --radius-sm: 0.375rem;
+        --radius-md: 0.5rem;
+        --radius-lg: 0.75rem;
+        --radius-xl: 1rem;
+        
+        /* ─── Transitions ─── */
+        --transition-fast: all 0.15s ease;
+        --transition-base: all 0.2s ease;
+        --transition-slow: all 0.3s ease;
       }
       
-      /* Dark mode glass adjustments */
+      /* ─── Dark Mode ─── */
       .dark {
-        --glass-bg: rgba(30, 41, 59, 0.7);
-        --glass-border: rgba(100, 116, 139, 0.18);
-        --glass-shadow: rgba(0, 0, 0, 0.3);
+        --bg-primary: #111827;
+        --bg-secondary: #1F2937;
+        --bg-tertiary: #374151;
+        
+        --border-color: #374151;
+        --border-color-strong: #4B5563;
+        
+        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+        --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
       }
       
-      /* Liquid Glass effect for cards */
-      .glass-card {
-        background: var(--glass-bg);
-        backdrop-filter: blur(var(--blur-amount));
-        -webkit-backdrop-filter: blur(var(--blur-amount));
-        border: 1px solid var(--glass-border);
-        box-shadow: 0 8px 32px 0 var(--glass-shadow);
-        transition: var(--tilt-transition);
+      body {
+        font-family: var(--font-body);
+        background-color: var(--bg-secondary);
+        color: var(--gray-900);
+        margin: 0;
+        padding: 0;
       }
       
-      /* 3D Tilt Card effect */
-      .tilt-card {
-        transform-style: preserve-3d;
-        perspective: 1000px;
-        transition: var(--tilt-transition);
+      .dark body {
+        background-color: var(--bg-secondary);
+        color: var(--gray-100);
       }
       
-      .tilt-card:hover {
-        transform: scale(var(--tilt-scale));
+      /* ══════════════════════════════════════════════════════════════════════
+       * PROFESSIONAL CARD COMPONENT
+       * ══════════════════════════════════════════════════════════════════════
+       */
+      .pro-card {
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-sm);
+        transition: var(--transition-base);
       }
       
-      /* 3D Tilt Button effect */
-      .tilt-btn {
-        transform-style: preserve-3d;
-        transition: var(--tilt-transition);
+      .pro-card:hover {
+        box-shadow: var(--shadow-md);
       }
       
-      .tilt-btn:active {
-        transform: scale(0.98) translateZ(-10px);
+      .pro-card-elevated {
+        box-shadow: var(--shadow-md);
       }
       
-      /* Shimmer effect for loading states */
+      .pro-card-elevated:hover {
+        box-shadow: var(--shadow-lg);
+      }
+      
+      /* ══════════════════════════════════════════════════════════════════════
+       * KPI CARDS - Clean & Professional
+       * ══════════════════════════════════════════════════════════════════════
+       */
+      .kpi-card {
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
+        box-shadow: var(--shadow-sm);
+        transition: var(--transition-base);
+        position: relative;
+        overflow: hidden;
+      }
+      
+      .kpi-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+        background: var(--primary-600);
+        transition: var(--transition-fast);
+      }
+      
+      .kpi-card:hover {
+        box-shadow: var(--shadow-md);
+        transform: translateY(-2px);
+      }
+      
+      .kpi-card:hover::before {
+        width: 6px;
+      }
+      
+      .kpi-card-blue::before {
+        background: linear-gradient(180deg, #3B82F6 0%, #2563EB 100%);
+      }
+      
+      .kpi-card-green::before {
+        background: linear-gradient(180deg, #10B981 0%, #059669 100%);
+      }
+      
+      .kpi-card-red::before {
+        background: linear-gradient(180deg, #EF4444 0%, #DC2626 100%);
+      }
+      
+      .kpi-card-yellow::before {
+        background: linear-gradient(180deg, #F59E0B 0%, #D97706 100%);
+      }
+      
+      /* ══════════════════════════════════════════════════════════════════════
+       * NAVIGATION & HEADER
+       * ══════════════════════════════════════════════════════════════════════
+       */
+      .pro-navbar {
+        background: var(--bg-primary);
+        border-bottom: 1px solid var(--border-color);
+        box-shadow: var(--shadow-sm);
+        position: sticky;
+        top: 0;
+        z-index: 40;
+      }
+      
+      .pro-navbar-gradient {
+        background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-700) 100%);
+        color: white;
+      }
+      
+      /* ══════════════════════════════════════════════════════════════════════
+       * BUTTONS - Professional Variants
+       * ══════════════════════════════════════════════════════════════════════
+       */
+      .btn-pro-primary {
+        background: var(--primary-600);
+        color: white;
+        border: none;
+        border-radius: var(--radius-md);
+        padding: 0.625rem 1.25rem;
+        font-weight: 500;
+        font-size: 0.875rem;
+        box-shadow: var(--shadow-sm);
+        transition: var(--transition-fast);
+        cursor: pointer;
+      }
+      
+      .btn-pro-primary:hover {
+        background: var(--primary-700);
+        box-shadow: var(--shadow-md);
+        transform: translateY(-1px);
+      }
+      
+      .btn-pro-primary:active {
+        transform: translateY(0);
+      }
+      
+      .btn-pro-secondary {
+        background: var(--bg-primary);
+        color: var(--gray-700);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: 0.625rem 1.25rem;
+        font-weight: 500;
+        font-size: 0.875rem;
+        transition: var(--transition-fast);
+        cursor: pointer;
+      }
+      
+      .btn-pro-secondary:hover {
+        background: var(--gray-50);
+        border-color: var(--border-color-strong);
+      }
+      
+      .dark .btn-pro-secondary {
+        background: var(--bg-tertiary);
+        color: var(--gray-200);
+        border-color: var(--border-color);
+      }
+      
+      .dark .btn-pro-secondary:hover {
+        background: var(--bg-secondary);
+      }
+      
+      /* ══════════════════════════════════════════════════════════════════════
+       * TABS - Clean Professional Style
+       * ══════════════════════════════════════════════════════════════════════
+       */
+      .pro-tab {
+        padding: 0.75rem 1.5rem;
+        font-weight: 500;
+        color: var(--gray-600);
+        border-bottom: 2px solid transparent;
+        transition: var(--transition-fast);
+        cursor: pointer;
+      }
+      
+      .pro-tab:hover {
+        color: var(--primary-600);
+        border-bottom-color: var(--primary-200);
+      }
+      
+      .pro-tab-active {
+        color: var(--primary-600);
+        border-bottom-color: var(--primary-600);
+      }
+      
+      .dark .pro-tab {
+        color: var(--gray-400);
+      }
+      
+      .dark .pro-tab:hover {
+        color: var(--primary-400);
+      }
+      
+      .dark .pro-tab-active {
+        color: var(--primary-400);
+      }
+      
+      /* ══════════════════════════════════════════════════════════════════════
+       * TABLES - Professional Data Grid
+       * ══════════════════════════════════════════════════════════════════════
+       */
+      .pro-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+      }
+      
+      .pro-table thead {
+        background: var(--gray-50);
+      }
+      
+      .dark .pro-table thead {
+        background: var(--bg-tertiary);
+      }
+      
+      .pro-table th {
+        padding: 0.75rem 1rem;
+        text-align: left;
+        font-weight: 600;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--gray-700);
+        border-bottom: 1px solid var(--border-color);
+      }
+      
+      .dark .pro-table th {
+        color: var(--gray-300);
+      }
+      
+      .pro-table td {
+        padding: 1rem;
+        border-bottom: 1px solid var(--border-color);
+        color: var(--gray-900);
+      }
+      
+      .dark .pro-table td {
+        color: var(--gray-200);
+      }
+      
+      .pro-table tbody tr {
+        transition: var(--transition-fast);
+      }
+      
+      .pro-table tbody tr:hover {
+        background: var(--gray-50);
+      }
+      
+      .dark .pro-table tbody tr:hover {
+        background: var(--bg-tertiary);
+      }
+      
+      .pro-table tbody tr:last-child td {
+        border-bottom: none;
+      }
+      
+      /* ══════════════════════════════════════════════════════════════════════
+       * INPUTS & FORMS - Professional Style
+       * ══════════════════════════════════════════════════════════════════════
+       */
+      .pro-input {
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: 0.625rem 0.875rem;
+        font-size: 0.875rem;
+        color: var(--gray-900);
+        transition: var(--transition-fast);
+        width: 100%;
+      }
+      
+      .pro-input:focus {
+        outline: none;
+        border-color: var(--primary-600);
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+      }
+      
+      .dark .pro-input {
+        background: var(--bg-tertiary);
+        color: var(--gray-100);
+        border-color: var(--border-color);
+      }
+      
+      .dark .pro-input:focus {
+        border-color: var(--primary-500);
+      }
+      
+      /* ══════════════════════════════════════════════════════════════════════
+       * DROPDOWNS - Professional Select Menus
+       * ══════════════════════════════════════════════════════════════════════
+       */
+      .pro-dropdown {
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-lg);
+        max-height: 20rem;
+        overflow-y: auto;
+        z-index: 50;
+      }
+      
+      .pro-dropdown-item {
+        padding: 0.625rem 1rem;
+        cursor: pointer;
+        transition: var(--transition-fast);
+      }
+      
+      .pro-dropdown-item:hover {
+        background: var(--gray-50);
+      }
+      
+      .dark .pro-dropdown-item:hover {
+        background: var(--bg-tertiary);
+      }
+      
+      /* ══════════════════════════════════════════════════════════════════════
+       * BADGES & INDICATORS
+       * ══════════════════════════════════════════════════════════════════════
+       */
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        line-height: 1;
+      }
+      
+      .badge-primary {
+        background: var(--primary-100);
+        color: var(--primary-700);
+      }
+      
+      .badge-success {
+        background: var(--success-light);
+        color: #065F46;
+      }
+      
+      .badge-warning {
+        background: var(--warning-light);
+        color: #92400E;
+      }
+      
+      .badge-danger {
+        background: var(--danger-light);
+        color: #991B1B;
+      }
+      
+      /* ══════════════════════════════════════════════════════════════════════
+       * UTILITIES & ANIMATIONS
+       * ══════════════════════════════════════════════════════════════════════
+       */
       @keyframes shimmer {
         0% { background-position: -1000px 0; }
         100% { background-position: 1000px 0; }
@@ -117,15 +507,80 @@
         background-size: 1000px 100%;
       }
       
+      /* Scrollbar Styling */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      
+      ::-webkit-scrollbar-track {
+        background: var(--bg-secondary);
+      }
+      
+      ::-webkit-scrollbar-thumb {
+        background: var(--gray-300);
+        border-radius: 4px;
+      }
+      
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--gray-400);
+      }
+      
+      .dark ::-webkit-scrollbar-thumb {
+        background: var(--gray-600);
+      }
+      
+      .dark ::-webkit-scrollbar-thumb:hover {
+        background: var(--gray-500);
+      }
+      
       /* Print-specific styles are handled by the controlledPrint function */
     </style>
   </head>
-  <body class="bg-indigo-50 dark:bg-slate-900 antialiased">
+  <body class="bg-gray-50 dark:bg-gray-900 antialiased">
     <div id="root"></div>
     <script type="module">
 // @ts-nocheck
-const { useState, useEffect, useCallback, useMemo, useRef, StrictMode, Fragment } = React;
+const { useState, useEffect, useCallback, useMemo, useRef, StrictMode, Fragment, Component } = React;
 const e = React.createElement;
+
+// ErrorBoundary Component
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  
+  componentDidCatch(error, errorInfo) {
+    console.error('ErrorBoundary caught error:', error, errorInfo);
+  }
+  
+  render() {
+    if (this.state.hasError) {
+      return e('div', { 
+        className: 'glass-alert glass-alert-danger p-6 rounded-lg m-4' 
+      },
+        e('h3', { className: 'text-lg font-semibold text-red-600 dark:text-red-400 mb-2' }, 
+          this.props.message || 'Something went wrong'
+        ),
+        e('p', { className: 'text-sm text-slate-600 dark:text-slate-400' },
+          'Please refresh the page or contact support if the problem persists.'
+        ),
+        this.state.error && e('details', { className: 'mt-4 text-xs' },
+          e('summary', { className: 'cursor-pointer text-slate-500' }, 'Error details'),
+          e('pre', { className: 'mt-2 p-2 bg-slate-100 dark:bg-slate-800 rounded overflow-auto' },
+            this.state.error.toString()
+          )
+        )
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // --- Global declarations ---
 // These are declared in the HTML head via CDN scripts
@@ -146,6 +601,26 @@ const MAILING_LIST_CATEGORIES = [
   "Admin", "HR", "EA", "IT", "KS", "DC", "Investment", 
   "Manikant", "Neha", "Suresh", "Ashok"
 ];
+// Valid transaction type patterns
+const VALID_TYPES = [
+  'Missing_in_PR_Cumulative',
+  'Missing_in_PR_Current_Month',
+  'Missing_in_PR_NowClaimed',
+  'Missing_2B_Cumulative',
+  'Missing_2B_Current_Month',
+  'Missing_2B_NowUploaded',
+  'Matched'
+];
+
+// Type matching patterns for consistent KPI calculations
+const TYPE_PATTERNS = {
+  MISSING_PR_CUMULATIVE: /^Missing_in_PR_(Cumulative|Current_Month)$/,
+  MISSING_PR_CLAIMED: /^Missing_in_PR_NowClaimed$/,
+  MISSING_2B_CUMULATIVE: /^Missing_2B_(Cumulative|Current_Month)$/,
+  MISSING_2B_CLAIMED: /^Missing_2B_NowUploaded$/,
+  MISSING_PR_ANY: /^Missing_in_PR/
+};
+
 const MONTH_MAP = {
   Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6,
   Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12
@@ -656,7 +1131,15 @@ const fileProcessor = (function() {
                               newRow[key.trim()] = typeof row[key] === 'string' ? row[key].trim() : row[key];
                           }
                       });
-                      newRow['Type'] = String(newRow['Type'] ?? newRow['Tag (Type)'] ?? "");
+                      // Normalize and validate Type
+                      let type = String(newRow['Type'] ?? newRow['Tag (Type)'] ?? "").trim();
+                      // Normalize case and spaces
+                      type = type.replace(/\s+/g, '_');
+                      // Validate against known types
+                      if (type && !VALID_TYPES.includes(type)) {
+                        console.warn(`Row ${i}: Unknown Type "${type}". Keeping as-is but may affect KPI calculations.`);
+                      }
+                      newRow['Type'] = type;
                       newRow['Sum of Taxable Value (2B)'] = parseCurrency(newRow['Sum of Taxable Value (2B)']);
                       newRow['Sum of IGST (2B)'] = parseCurrency(newRow['Sum of IGST (2B)']);
                       newRow['Sum of CGST (2B)'] = parseCurrency(newRow['Sum of CGST (2B)']);
@@ -952,27 +1435,7 @@ const tiltEffect = (function() {
 
 
 // --- React Components ---
-class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
-  componentDidCatch(error, errorInfo) {
-    console.error("ErrorBoundary caught an error:", error, errorInfo);
-  }
-  render() {
-    if (this.state.hasError) {
-      return e('div', { className: 'bg-red-100 dark:bg-red-900/20 border border-red-400 dark:border-red-500/30 text-red-700 dark:text-red-300 px-4 py-3 rounded relative text-sm' },
-        e('strong', { className: 'font-bold' }, 'Something went wrong. '),
-        e('span', { className: 'block sm:inline' }, this.props.message || 'This component could not be loaded.')
-      );
-    }
-    return this.props.children;
-  }
-}
+// ErrorBoundary is now defined earlier in the code (line 366)
 
 const SvgIcon = ({ d, className }) => e('svg', { xmlns: "http://www.w3.org/2000/svg", className, fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 2 }, e('path', { strokeLinecap: "round", strokeLinejoin: "round", d }));
 const SvgIconThick = ({ d, className }) => e('svg', { xmlns: "http://www.w3.org/2000/svg", className, fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 3 }, e('path', { strokeLinecap: "round", strokeLinejoin: "round", d }));
@@ -1006,18 +1469,21 @@ const Icons = {
     ArrowLeftIcon: ({ className }) => e(SvgIcon, { className, d: "M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" }),
     DocumentPlusIcon: ({ className }) => e(SvgIcon, { className, d: "M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m.75 12l3 3m0 0l3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" }),
     PencilIcon: ({ className }) => e(SvgIcon, { className, d: "M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" }),
+    DocumentCheckIcon: ({ className }) => e(SvgIcon, { className, d: "M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" }),
+    BuildingOfficeIcon: ({ className }) => e(SvgIcon, { className, d: "M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" }),
+    DocumentTextIcon: ({ className }) => e(SvgIcon, { className, d: "M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" }),
+    EnvelopeIcon: ({ className }) => e(SvgIcon, { className, d: "M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" }),
 };
 
 const Button = ({ variant = 'primary', children, icon, className, ...props }) => {
-  const baseClasses = 'tilt-btn inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
   const variantClasses = {
-    primary: 'bg-primary text-white hover:bg-primary-hover focus:ring-primary',
-    secondary: 'bg-slate-600 text-white hover:bg-slate-700 focus:ring-slate-500',
-    danger: 'bg-danger text-white hover:bg-danger-hover focus:ring-danger',
-    ghost: 'bg-transparent text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 focus:ring-primary',
-    'danger-ghost': 'bg-transparent text-danger hover:bg-danger/10 focus:ring-danger'
+    primary: 'btn-pro-primary',
+    secondary: 'btn-pro-secondary',
+    danger: 'bg-red-600 hover:bg-red-700 text-white border-none rounded-md px-5 py-2.5 font-medium text-sm shadow-sm transition-all cursor-pointer',
+    ghost: 'bg-transparent text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 border border-transparent rounded-md px-4 py-2 font-medium text-sm transition-fast cursor-pointer',
+    'danger-ghost': 'bg-transparent text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 border border-transparent rounded-md px-4 py-2 font-medium text-sm transition-fast cursor-pointer'
   };
-  const finalClassName = `${baseClasses} ${variantClasses[variant]} ${className || ''}`;
+  const finalClassName = `inline-flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed ${variantClasses[variant] || variantClasses.primary} ${className || ''}`;
   
   return e('button', { className: finalClassName, ...props },
     icon && e('span', { className: 'mr-2 -ml-1 h-5 w-5' }, icon),
@@ -1035,23 +1501,16 @@ const ProgressBar = ({ progress }) => {
 };
 
 const ProductCard = ({ title, description, icon, onClick, earlyAccess = false }) => {
-  const WavyBg = () => e('svg', { 
-      className: 'absolute top-0 left-0 w-full h-full text-indigo-50/80 dark:text-slate-800/50 opacity-40 group-hover:opacity-60 transition-opacity z-0',
-      viewBox: "0 0 350 150",
-      preserveAspectRatio: "none"
-  }, e('path', { d: "M-1.33,49.99 C150.00,150.00 170.04,-49.98 350.00,49.99 L350.00,150.00 L0.00,150.00 Z", fill: "currentColor" }));
-
   return e('div', { 
       onClick,
-      className: 'glass-card tilt-card relative bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 cursor-pointer hover:shadow-lg hover:border-primary/50 dark:hover:border-primary transition-all group overflow-hidden' 
+      className: 'pro-card pro-card-elevated relative p-6 cursor-pointer group overflow-hidden' 
   },
-      e(WavyBg, null),
-      e('div', { className: 'relative z-10 flex flex-col h-full' },
-          earlyAccess && e('div', { className: 'absolute top-0 right-0 bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded-full -mr-2 -mt-2' }, 'Early access'),
-          e('div', { className: 'mb-4' }, icon),
+      earlyAccess && e('div', { className: 'absolute top-4 right-4 badge badge-primary' }, 'Early Access'),
+      e('div', { className: 'flex flex-col h-full' },
+          e('div', { className: 'mb-4 p-3 bg-gradient-to-br from-primary-500 to-primary-600 text-white rounded-lg w-fit' }, icon),
           e('div', { className: 'flex-grow' },
-              e('h3', { className: 'text-lg font-bold text-slate-800 dark:text-slate-100' }, title),
-              e('p', { className: 'mt-1 text-sm text-slate-600 dark:text-slate-400' }, description)
+              e('h3', { className: 'text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2' }, title),
+              e('p', { className: 'text-sm text-gray-600 dark:text-gray-400' }, description)
           )
       )
   );
@@ -1059,18 +1518,27 @@ const ProductCard = ({ title, description, icon, onClick, earlyAccess = false })
 
 const KpiCard = ({ title, value, subValue, icon, color, onClick }) => {
   const colorClasses = {
-      red: 'text-red-500',
-      yellow: 'text-amber-500',
-      blue: 'text-blue-500',
-      green: 'text-green-500',
-      default: 'text-slate-800 dark:text-slate-100'
+      red: 'kpi-card-red',
+      yellow: 'kpi-card-yellow',
+      blue: 'kpi-card-blue',
+      green: 'kpi-card-green',
+      default: 'kpi-card-blue'
   };
-  return e('div', { onClick, className: `glass-card tilt-card bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md border border-slate-200 dark:border-slate-700 flex items-start ${onClick ? 'cursor-pointer hover:shadow-lg hover:border-primary/50 dark:hover:border-primary/50' : ''}` },
-      icon && e('div', { className: 'p-3 rounded-full mr-4 bg-primary-light dark:bg-primary/20' }, icon),
-      e('div', null,
-          e('div', { className: 'text-sm font-medium text-slate-500 dark:text-slate-400' }, title),
-          e('div', { className: `text-2xl font-bold ${colorClasses[color] || colorClasses.default}` }, value),
-          subValue && e('div', { className: 'text-xs text-slate-400 dark:text-slate-500' }, subValue)
+  const valueColorClasses = {
+      red: 'text-red-600 dark:text-red-400',
+      yellow: 'text-amber-600 dark:text-amber-400',
+      blue: 'text-blue-600 dark:text-blue-400',
+      green: 'text-green-600 dark:text-green-400',
+      default: 'text-gray-900 dark:text-gray-100'
+  };
+  return e('div', { onClick, className: `kpi-card ${colorClasses[color] || colorClasses.default} ${onClick ? 'cursor-pointer' : ''}` },
+      e('div', { className: 'flex items-start justify-between' },
+          e('div', { className: 'flex-1' },
+              e('div', { className: 'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2' }, title),
+              e('div', { className: `text-3xl font-bold mb-1 ${valueColorClasses[color] || valueColorClasses.default}` }, value),
+              subValue && e('div', { className: 'text-sm text-gray-500 dark:text-gray-400' }, subValue)
+          ),
+          icon && e('div', { className: 'flex-shrink-0 ml-4 p-3 rounded-lg bg-gray-50 dark:bg-gray-800' }, icon)
       )
   );
 };
@@ -1089,13 +1557,16 @@ const LoginPage = ({ onLoginSuccess }) => {
         }
     };
 
-    return e('div', { className: 'flex items-center justify-center min-h-screen p-4' },
-        e('div', { className: 'w-full max-w-sm' },
-            e('div', { className: 'mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary-light dark:bg-primary/20 mb-5' },
-                e(Icons.BriefcaseIcon, { className: 'h-8 w-8 text-primary' })
+    return e('div', { className: 'min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-600 via-primary-700 to-purple-700 p-4' },
+        e('div', { className: 'w-full max-w-md' },
+            e('div', { className: 'text-center mb-8' },
+                e('div', { className: 'mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-white shadow-2xl mb-4 transform hover:scale-105 transition-transform' },
+                    e('span', { className: 'text-3xl font-bold bg-gradient-to-br from-primary-600 to-purple-600 bg-clip-text text-transparent' }, 'G')
+                ),
+                e('h1', { className: 'text-4xl font-bold text-white mb-2' }, 'GST Portal'),
+                e('p', { className: 'text-primary-100' }, 'Reconciliation & Compliance System')
             ),
-            e('h1', { className: 'text-center text-3xl font-bold text-slate-800 dark:text-slate-100' }, 'Compliance Cloud'),
-            e('div', { className: 'mt-8 bg-white dark:bg-slate-800 p-8 rounded-xl shadow-md border border-slate-200 dark:border-slate-700' },
+            e('div', { className: 'pro-card p-8 shadow-2xl' },
                 e('form', { onSubmit: handleLogin, className: 'space-y-6' },
                     e('div', null,
                         e('label', { htmlFor: 'username', className: 'block text-sm font-medium text-slate-700 dark:text-slate-300' }, 'Username'),
@@ -1141,11 +1612,19 @@ const MainLandingPage = ({ onNavigateToGst }) => {
         }
     ];
 
-    return e('div', { className: 'min-h-screen bg-gradient-to-br from-indigo-50 to-white dark:from-slate-900 dark:to-slate-800 p-6 sm:p-8' },
-        e('div', { className: 'max-w-screen-xl mx-auto' },
-            e('h1', { className: 'text-3xl font-bold text-slate-800 dark:text-slate-100' }, 'Welcome, Harish'),
-            e('h2', { className: 'mt-2 text-xl text-slate-600 dark:text-slate-400' }, 'Clear Compliance Cloud'),
-            e('div', { className: 'mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' },
+    return e('div', { className: 'min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800' },
+        e('div', { className: 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12' },
+            e('div', { className: 'text-center mb-16' },
+                e('div', { className: 'inline-flex items-center gap-3 mb-6' },
+                    e('div', { className: 'h-16 w-16 rounded-2xl bg-gradient-to-br from-primary-600 to-purple-600 flex items-center justify-center shadow-xl transform hover:scale-105 transition-transform' },
+                        e('span', { className: 'text-2xl font-bold text-white' }, 'C')
+                    ),
+                    e('h1', { className: 'text-5xl font-bold bg-gradient-to-r from-gray-900 via-primary-600 to-purple-600 dark:from-white dark:via-primary-400 dark:to-purple-400 bg-clip-text text-transparent' }, 'Compliance Cloud')
+                ),
+                e('h2', { className: 'text-2xl font-semibold text-gray-700 dark:text-gray-300 mb-3' }, 'Welcome, Harish'),
+                e('p', { className: 'text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto' }, 'Enterprise-grade compliance and business intelligence platform for modern businesses')
+            ),
+            e('div', { className: 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8' },
                 cards.map(card => e(ProductCard, { key: card.title, ...card }))
             )
         )
@@ -1248,7 +1727,7 @@ const StartupScreen = ({ onFileSelect, onLoadSaved, onClearSaved, onLoadMockData
 };
 
 const TextInput = (props) => {
-    return e('input', { ...props, className: `w-full rounded-md border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 shadow-sm text-sm text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-1 focus:ring-primary ${props.className || ''}` });
+    return e('input', { ...props, className: `pro-input ${props.className || ''}` });
 };
 
 const Checkbox = ({ id, checked, onChange, label, ...props }) => {
@@ -1337,19 +1816,19 @@ const MultiSelect = ({ label, values, options, onChange, className = '' }) => {
       e('span', { className: 'block truncate' }, displayValue),
       e('span', { className: 'absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none' }, e(Icons.ChevronUpDownIconCompact, { className: 'h-5 w-5 text-gray-400' }))
     ),
-    isOpen && e('div', { className: 'absolute z-30 mt-1 w-full bg-white dark:bg-slate-800 shadow-lg max-h-80 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm flex flex-col' },
+    isOpen && e('div', { className: 'absolute z-50 mt-1 w-full bg-white dark:bg-slate-800 shadow-lg max-h-80 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm flex flex-col' },
       e('div', { className: 'p-2 border-b dark:border-slate-700' }, 
           e(TextInput, { placeholder: `Search...`, value: searchTerm, onChange: (e) => setSearchTerm(e.target.value), className: 'w-full' })
       ),
       e('div', { className: 'flex-grow overflow-y-auto' },
-          filteredOptions.map(option => e('div', { key: option, onClick: () => handleToggleOption(option), className: 'cursor-pointer select-none relative py-2 pl-3 pr-9 text-gray-900 dark:text-gray-200 hover:bg-primary-light dark:hover:bg-slate-700 flex items-center' },
+          filteredOptions.map(option => e('div', { key: option, onClick: (e) => { e.stopPropagation(); handleToggleOption(option); }, className: 'cursor-pointer select-none relative py-2 pl-3 pr-9 text-gray-900 dark:text-gray-200 hover:bg-primary-light dark:hover:bg-slate-700 flex items-center' },
               e('input', { type: 'checkbox', readOnly: true, checked: values.includes(option), className: 'h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-primary focus:ring-primary mr-3' }),
               e('span', { className: 'font-normal block truncate' }, option)
           ))
       ),
       e('div', { className: 'flex justify-between p-2 border-t dark:border-slate-700' },
-          e('button', { onClick: () => onChange(options), className: 'text-sm text-primary hover:underline' }, "Select All"),
-          e('button', { onClick: () => onChange([]), className: 'text-sm text-primary hover:underline' }, "Clear All"),
+          e('button', { onClick: (e) => { e.stopPropagation(); onChange(options); }, className: 'text-sm text-primary hover:underline' }, "Select All"),
+          e('button', { onClick: (e) => { e.stopPropagation(); onChange([]); }, className: 'text-sm text-primary hover:underline' }, "Clear All"),
       )
     )
   );
@@ -1468,19 +1947,19 @@ const ColumnFilterPopover = ({ columnKey, data, currentFilters, onFilterChange, 
     const handleSelectAll = () => onFilterChange(uniqueValues);
     const handleClearAll = () => onFilterChange([]);
 
-    return e('div', { ref: menuRef, className: 'absolute top-full mt-2 left-0 z-40 bg-white dark:bg-slate-800 shadow-lg max-h-80 w-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm flex flex-col' },
+    return e('div', { ref: menuRef, className: 'glass-dropdown absolute top-full mt-2 left-0 z-50 max-h-80 w-60 rounded-lg py-1 text-base focus:outline-none sm:text-sm flex flex-col' },
       e('div', { className: 'p-2 border-b dark:border-slate-700' },
           e(TextInput, { placeholder: `Search...`, value: searchTerm, onChange: (e) => setSearchTerm(e.target.value) })
       ),
       e('div', { className: 'flex-grow overflow-y-auto' },
-          filteredValues.map(value => e('div', { key: String(value), onClick: () => handleToggle(value), className: 'cursor-pointer select-none relative py-2 pl-3 pr-9 text-gray-900 dark:text-gray-200 hover:bg-primary-light dark:hover:bg-slate-700 flex items-center' },
+          filteredValues.map(value => e('div', { key: String(value), onClick: (e) => { e.stopPropagation(); handleToggle(value); }, className: 'cursor-pointer select-none relative py-2 pl-3 pr-9 text-gray-900 dark:text-gray-200 hover:bg-primary-light dark:hover:bg-slate-700 flex items-center' },
               e('input', { type: 'checkbox', readOnly: true, checked: currentFilters.includes(value), className: 'h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary mr-3' }),
               e('span', { className: 'font-normal block truncate' }, String(value))
           ))
       ),
       e('div', { className: 'flex justify-between p-2 border-t dark:border-slate-700' },
-          e('button', { onClick: handleSelectAll, className: 'text-sm text-primary hover:underline' }, "Select All"),
-          e('button', { onClick: handleClearAll, className: 'text-sm text-primary hover:underline' }, "Clear All"),
+          e('button', { onClick: (e) => { e.stopPropagation(); handleSelectAll(); }, className: 'text-sm text-primary hover:underline' }, "Select All"),
+          e('button', { onClick: (e) => { e.stopPropagation(); handleClearAll(); }, className: 'text-sm text-primary hover:underline' }, "Clear All"),
       )
     );
 };
@@ -1588,7 +2067,7 @@ const DataTable = ({ columns, data, initialPageSize = 10, selectedRows, onSelect
     const isAllOnPageSelected = onSelectionChange && paginatedData.length > 0 && paginatedDataIds.every(id => finalSelectedRows.includes(id));
 
 
-    return e('div', { className: 'bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md border border-slate-200 dark:border-slate-700 min-h-[400px] flex flex-col' },
+    return e('div', { className: 'pro-card p-6 min-h-[400px] flex flex-col' },
         e('div', { className: 'mb-4' }, 
             e(TextInput, { 
                 placeholder: 'Search all columns...', 
@@ -1597,11 +2076,11 @@ const DataTable = ({ columns, data, initialPageSize = 10, selectedRows, onSelect
             })
         ),
         e('div', { className: 'overflow-x-auto flex-grow' },
-            e('table', { className: 'w-full text-sm' },
-                e('thead', { className: 'text-xs text-slate-700 dark:text-slate-300 uppercase bg-slate-50 dark:bg-slate-700/50' },
+            e('table', { className: 'pro-table' },
+                e('thead', null,
                     e('tr', null,
-                        onSelectionChange && e('th', { className: 'px-4 py-3' }, e(Checkbox, { id: 'select-all-on-page', checked: isAllOnPageSelected, onChange: handleSelectAllOnPage })),
-                        columns.map(col => e('th', { key: col.header, className: `px-4 py-3 text-black dark:text-white`, onClick: () => col.sortable && requestSort(col.key) }, 
+                        onSelectionChange && e('th', null, e(Checkbox, { id: 'select-all-on-page', checked: isAllOnPageSelected, onChange: handleSelectAllOnPage })),
+                        columns.map(col => e('th', { key: col.header, onClick: () => col.sortable && requestSort(col.key) }, 
                             e('div', { className: 'flex items-center justify-between' },
                                 e('div', { className: `flex items-center ${col.sortable ? 'cursor-pointer' : ''}` }, 
                                     col.header,
@@ -1626,14 +2105,14 @@ const DataTable = ({ columns, data, initialPageSize = 10, selectedRows, onSelect
                     )
                 ),
                 e('tbody', null,
-                    paginatedData.map((row, index) => e('tr', { key: row.id || index, className: 'bg-white dark:bg-slate-800 border-b border-slate-400 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50' },
-                        onSelectionChange && e('td', { className: 'px-4 py-2' }, e(Checkbox, { id: `select-row-${row.id}`, checked: finalSelectedRows.includes(row.id), onChange: () => {
+                    paginatedData.map((row, index) => e('tr', { key: row.id || index },
+                        onSelectionChange && e('td', null, e(Checkbox, { id: `select-row-${row.id}`, checked: finalSelectedRows.includes(row.id), onChange: () => {
                             const newSelection = finalSelectedRows.includes(row.id) ? finalSelectedRows.filter(id => id !== row.id) : [...finalSelectedRows, row.id];
                             onSelectionChange(newSelection);
                         }})),
                         columns.map(col => {
                             const value = col.render ? col.render(row) : row[col.key];
-                            return e('td', { key: col.key, className: 'px-4 py-2 text-black dark:text-slate-200 align-top' }, value);
+                            return e('td', { key: col.key }, value);
                         })
                     ))
                 )
@@ -1642,7 +2121,7 @@ const DataTable = ({ columns, data, initialPageSize = 10, selectedRows, onSelect
         e('div', { className: 'flex flex-col sm:flex-row justify-between items-center pt-4 text-sm text-slate-600 dark:text-slate-400' },
             e('div', { className: 'flex items-center gap-2 mb-2 sm:mb-0' },
                 e('span', null, 'Rows per page:'),
-                e('select', { value: rowsPerPage, onChange: (e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }, className: 'p-1 border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800' },
+                e('select', { value: rowsPerPage, onChange: (e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }, className: 'glass-input p-2 rounded-lg' },
                     [10, 25, 50, 100].map(size => e('option', { key: size, value: size }, size))
                 )
             ),
@@ -1888,7 +2367,7 @@ const TransactionsPage = ({ data, actionState, updateAction, updateMultipleActio
     
     const BulkActionBar = () => {
         if (selectedRows.length === 0) return null;
-        return e('div', { className: 'bg-primary-light dark:bg-slate-700 p-2 rounded-md mb-4 flex items-center gap-4' },
+        return e('div', { className: 'glass-surface p-3 rounded-lg mb-4 flex items-center gap-4' },
             e('span', { className: 'text-sm font-medium dark:text-slate-200' }, `${selectedRows.length} rows selected`),
             e(Select, { value: bulkAction, options: ACTION_OPTIONS, onChange: (e) => setBulkAction(e.target.value), className: 'w-48' }),
             e(Button, { onClick: handleApplyBulkAction, disabled: bulkAction === 'None' }, 'Apply'),
@@ -1963,7 +2442,7 @@ const SuppliersPage = ({ data, assignmentState, updateAssignment }) => {
 };
 
 const MailingListPage = ({ data, actionState, assignmentState, setPrintModalData }) => {
-    const handleShowPreview = (category) => {
+    const getCategoryStats = (category) => {
         const assignedSuppliers = Object.entries(assignmentState)
             .filter(([key, cat]) => cat === category)
             .map(([key]) => key);
@@ -1983,17 +2462,80 @@ const MailingListPage = ({ data, actionState, assignmentState, setPrintModalData
             return false;
         });
 
-        if (mailingData.length === 0) {
+        const totalAmount = mailingData.reduce((sum, row) => sum + (row['Total GST'] || 0), 0);
+        const supplierSet = new Set(mailingData.map(row => row['Supplier Name']));
+
+        return {
+            count: mailingData.length,
+            suppliers: supplierSet.size,
+            amount: totalAmount,
+            data: mailingData
+        };
+    };
+
+    const handleShowPreview = (category, stats) => {
+        if (stats.count === 0) {
             alert(`No pending transactions found for mailing list: ${category}`);
             return;
         }
-        setPrintModalData({ isOpen: true, category, data: mailingData });
+        setPrintModalData({ isOpen: true, category, data: stats.data });
     };
 
-    return e('div', { className: 'bg-white dark:bg-slate-800 p-6 rounded-lg shadow-md border dark:border-slate-700' },
-        e('h2', { className: 'text-lg font-semibold mb-4 dark:text-slate-100' }, 'Select a Category to View / Export:'),
-        e('div', { className: 'flex flex-wrap gap-3' },
-            MAILING_LIST_CATEGORIES.map(cat => e(Button, { key: cat, onClick: () => handleShowPreview(cat) }, cat))
+    return e('div', { className: 'space-y-6' },
+        e('div', { className: 'pro-card p-6' },
+            e('div', { className: 'flex items-center justify-between mb-6' },
+                e('div', null,
+                    e('h2', { className: 'text-2xl font-bold text-gray-900 dark:text-gray-100' }, 'Mailing Lists'),
+                    e('p', { className: 'text-sm text-gray-600 dark:text-gray-400 mt-1' }, 'Organized by supplier categories for targeted communication')
+                ),
+                e(Icons.EnvelopeIcon, { className: 'h-10 w-10 text-primary-500' })
+            )
+        ),
+        e('div', { className: 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' },
+            MAILING_LIST_CATEGORIES.map(cat => {
+                const stats = getCategoryStats(cat);
+                const categoryColors = {
+                    'Key Suppliers': 'from-blue-500 to-blue-600',
+                    'Medium Suppliers': 'from-green-500 to-green-600',
+                    'Small Suppliers': 'from-amber-500 to-amber-600',
+                    'Other Suppliers': 'from-purple-500 to-purple-600'
+                };
+                const gradientClass = categoryColors[cat] || 'from-gray-500 to-gray-600';
+
+                return e('div', { key: cat, className: 'pro-card overflow-hidden hover:shadow-lg transition-shadow' },
+                    e('div', { className: `bg-gradient-to-r ${gradientClass} p-6 text-white` },
+                        e('h3', { className: 'text-xl font-bold mb-2' }, cat),
+                        e('div', { className: 'flex items-center gap-2 text-white/90' },
+                            e(Icons.BuildingOfficeIcon, { className: 'h-5 w-5' }),
+                            e('span', { className: 'text-sm' }, `${stats.suppliers} Suppliers`)
+                        )
+                    ),
+                    e('div', { className: 'p-6' },
+                        e('div', { className: 'space-y-4 mb-6' },
+                            e('div', { className: 'flex justify-between items-center' },
+                                e('span', { className: 'text-sm text-gray-600 dark:text-gray-400' }, 'Pending Items'),
+                                e('span', { className: 'text-2xl font-bold text-gray-900 dark:text-gray-100' }, stats.count)
+                            ),
+                            e('div', { className: 'flex justify-between items-center' },
+                                e('span', { className: 'text-sm text-gray-600 dark:text-gray-400' }, 'Total Amount'),
+                                e('span', { className: 'text-lg font-semibold text-gray-900 dark:text-gray-100' }, formatCurrency(stats.amount, false))
+                            )
+                        ),
+                        e('div', { className: 'flex gap-2' },
+                            e(Button, { 
+                                onClick: () => handleShowPreview(cat, stats), 
+                                className: 'flex-1',
+                                disabled: stats.count === 0
+                            }, 'View Details'),
+                            stats.count > 0 && e(Button, { 
+                                onClick: () => handleShowPreview(cat, stats), 
+                                variant: 'secondary',
+                                className: 'px-3'
+                            }, e(Icons.EnvelopeIcon, { className: 'h-4 w-4' }))
+                        )
+                    )
+                );
+            })
         )
     );
 };
@@ -2090,7 +2632,7 @@ const ThinkingModeModal = ({ isOpen, onClose, contextData }) => {
                         rows: 4, 
                         value: prompt,
                         onChange: (e) => setPrompt(e.target.value),
-                        className: 'w-full rounded-md border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 shadow-sm text-sm text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-1 focus:ring-primary',
+                        className: 'glass-input w-full rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500',
                         placeholder: 'e.g., "What are the common trends for suppliers with missing GST in the last quarter?" or "Summarize the top 3 suppliers by missing GST and suggest an action plan."'
                     })
                 ),
@@ -2104,7 +2646,7 @@ const ThinkingModeModal = ({ isOpen, onClose, contextData }) => {
                         e('div', { className: 'w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin' }),
                         e('span', null, 'The AI is thinking... this may take a moment.')
                     ) :
-                    e('pre', { className: 'bg-slate-50 dark:bg-slate-900/50 p-3 rounded-md text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap font-sans' }, response)
+                    e('pre', { className: 'glass-sunken p-3 rounded-lg text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap font-sans' }, response)
                 )
             ),
             e('div', { className: 'p-4 border-t dark:border-slate-700 flex justify-end' },
@@ -2198,12 +2740,14 @@ const ReportsTab = ({ initialData, onDataChange }) => {
             return acc;
         }, { outwardValue: 0, taxPaid: 0, itcUtilized: 0 });
         
-        const totalVariance = totals.outwardValue - totals.taxPaid;
-        const totalVariancePercent = totals.outwardValue !== 0 ? (totalVariance / totals.outwardValue) * 100 : 0;
+        // Tax liability is calculated as tax paid + ITC utilized (total tax obligation)
+        const totalTaxLiability = totals.taxPaid + totals.itcUtilized;
+        const totalVariance = totalTaxLiability - totals.taxPaid;
+        const totalVariancePercent = totalTaxLiability !== 0 ? (totalVariance / totalTaxLiability) * 100 : 0;
         
         return {
             totalOutwardValue: totals.outwardValue,
-            totalTaxLiability: totals.outwardValue, 
+            totalTaxLiability: totalTaxLiability, 
             totalTaxPaid: totals.taxPaid,
             totalItcUtilized: totals.itcUtilized,
             variancePercent: totalVariancePercent,
@@ -2232,20 +2776,67 @@ const ReportsTab = ({ initialData, onDataChange }) => {
             data: {
                 labels: sortedMonths,
                 datasets: [
-                    { label: 'ITC Utilized', data: sortedMonths.map(m => monthlyData[m].itcUtilized), backgroundColor: '#3B82F6' },
-                    { label: 'Tax Paid', data: sortedMonths.map(m => monthlyData[m].taxPaid), backgroundColor: '#10B981' }
+                    { 
+                        label: 'ITC Utilized', 
+                        data: sortedMonths.map(m => monthlyData[m].itcUtilized), 
+                        backgroundColor: '#3B82F6',
+                        borderColor: '#3B82F6',
+                        borderWidth: 0,
+                        borderRadius: 6
+                    },
+                    { 
+                        label: 'Tax Paid', 
+                        data: sortedMonths.map(m => monthlyData[m].taxPaid), 
+                        backgroundColor: '#10B981',
+                        borderColor: '#10B981',
+                        borderWidth: 0,
+                        borderRadius: 6
+                    }
                 ]
             },
-            options: { responsive: true, plugins: { title: { display: true, text: 'ITC Utilized vs Tax Paid (Monthly)' } }, scales: { y: { ticks: { callback: (value) => formatCurrency(value, true) } } } }
+            options: { 
+                responsive: true, 
+                plugins: { 
+                    title: { display: true, text: 'ITC Utilized vs Tax Paid (Monthly)', font: { size: 14, weight: '600' } },
+                    legend: { display: true, position: 'top', labels: { padding: 15, usePointStyle: true, pointStyle: 'circle' } }
+                }, 
+                scales: { 
+                    y: { ticks: { callback: (value) => formatCurrency(value, true) }, grid: { color: 'rgba(0,0,0,0.05)' } },
+                    x: { grid: { display: false } }
+                } 
+            }
         };
 
         const outwardTrendChart = {
             type: 'line',
             data: {
                 labels: sortedMonths,
-                datasets: [{ label: 'Outward Value', data: sortedMonths.map(m => monthlyData[m].outwardValue), borderColor: '#4F46E5', tension: 0.1 }]
+                datasets: [{ 
+                    label: 'Outward Value', 
+                    data: sortedMonths.map(m => monthlyData[m].outwardValue), 
+                    borderColor: '#4F46E5',
+                    backgroundColor: 'rgba(79, 70, 229, 0.08)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 5,
+                    pointHoverRadius: 7,
+                    pointBackgroundColor: '#4F46E5',
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 2
+                }]
             },
-            options: { responsive: true, plugins: { title: { display: true, text: 'Outward Value Trend (Monthly)' } }, scales: { y: { ticks: { callback: (value) => formatCurrency(value, true) } } } }
+            options: { 
+                responsive: true, 
+                plugins: { 
+                    title: { display: true, text: 'Outward Value Trend (Monthly)', font: { size: 14, weight: '600' } },
+                    legend: { display: true, position: 'top', labels: { padding: 15, usePointStyle: true, pointStyle: 'circle' } }
+                }, 
+                scales: { 
+                    y: { ticks: { callback: (value) => formatCurrency(value, true) }, grid: { color: 'rgba(0,0,0,0.05)' } },
+                    x: { grid: { display: false } }
+                } 
+            }
         };
         
         const totalCash = Object.values(monthlyData).reduce((sum, d) => sum + d.cash, 0);
@@ -2255,9 +2846,20 @@ const ReportsTab = ({ initialData, onDataChange }) => {
             type: 'pie',
             data: {
                 labels: ['Cash', 'ITC'],
-                datasets: [{ data: [totalCash, totalItc], backgroundColor: ['#F59E0B', '#4F46E5'] }]
+                datasets: [{ 
+                    data: [totalCash, totalItc], 
+                    backgroundColor: ['#3B82F6', '#10B981'],
+                    borderColor: '#ffffff',
+                    borderWidth: 2
+                }]
             },
-            options: { responsive: true, plugins: { title: { display: true, text: 'Tax Payment Composition' } } }
+            options: { 
+                responsive: true, 
+                plugins: { 
+                    title: { display: true, text: 'Tax Payment Composition', font: { size: 16, weight: '600' } },
+                    legend: { display: true, position: 'bottom', labels: { padding: 15, font: { size: 12 } } }
+                } 
+            }
         };
         
         return { itcVsPaidChart, outwardTrendChart, paymentCompositionChart };
@@ -2320,8 +2922,8 @@ const ReportsTab = ({ initialData, onDataChange }) => {
         { header: 'Suggested Action', key: 'SuggestedAction', sortable: false },
     ];
 
-    const FilterBar = () => e('div', { className: 'bg-white/80 dark:bg-slate-800/80 p-3 rounded-lg shadow-sm border dark:border-slate-700/50 mb-6 flex flex-wrap items-center gap-4' },
-        e('div', { className: 'font-semibold text-slate-700 dark:text-slate-200' }, 'Filters:'),
+    const FilterBar = () => e('div', { className: 'pro-card p-4 mb-6 flex flex-wrap items-center gap-4' },
+        e('div', { className: 'font-semibold text-gray-700 dark:text-gray-200' }, 'Filters:'),
         e(MultiSelect, { label: 'Company Name', values: filters.company, options: filterOptions.companies, onChange: (v) => setFilters(f => ({...f, company: v})), className: 'min-w-[200px] z-20' }),
         e(MultiSelect, { label: 'Financial Year', values: filters.financialYear, options: filterOptions.financialYears, onChange: (v) => setFilters(f => ({...f, financialYear: v})), className: 'min-w-[150px] z-20' }),
         e(MultiSelect, { label: 'Month', values: filters.month, options: filterOptions.months, onChange: (v) => setFilters(f => ({...f, month: v})), className: 'min-w-[150px] z-20' })
@@ -2342,14 +2944,14 @@ const ReportsTab = ({ initialData, onDataChange }) => {
             e(KpiCard, { title: "Variance %", value: formatPercent(summaryMetrics.variancePercent), color: Math.abs(summaryMetrics.variancePercent) > 2 ? 'red' : 'green' }),
         ),
         e('div', { className: 'grid grid-cols-1 lg:grid-cols-3 gap-6' },
-          e('div', { className: 'lg:col-span-2 bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md border dark:border-slate-700' },
+          e('div', { className: 'lg:col-span-2 pro-card p-6' },
               e(ChartComponent, { chartConfig: chartData.itcVsPaidChart })
           ),
-          e('div', { className: 'bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md border dark:border-slate-700' },
+          e('div', { className: 'pro-card p-6' },
               e(ChartComponent, { chartConfig: chartData.paymentCompositionChart })
           )
         ),
-        e('div', { className: 'bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md border dark:border-slate-700' },
+        e('div', { className: 'pro-card p-6' },
             e(ChartComponent, { chartConfig: chartData.outwardTrendChart })
         ),
         e('div', null, 
@@ -2423,19 +3025,19 @@ const Dashboard = function({
     const kpiData = useMemo(() => {
         const missing2bCum = filteredData.reduce((sum, r) => {
             if (!r || typeof r.Type !== 'string') return sum;
-            return (r.Type === 'Missing_2B_Cumulative' || r.Type === 'Missing_2B_Current_Month') ? sum + r['Total GST'] : sum;
+            return TYPE_PATTERNS.MISSING_2B_CUMULATIVE.test(r.Type) ? sum + r['Total GST'] : sum;
         }, 0);
         const missingPrCum = filteredData.reduce((sum, r) => {
             if (!r || typeof r.Type !== 'string') return sum;
-            return (r.Type.startsWith('Missing_in_PR_') && !r.Type.includes('NowClaimed')) ? sum + r['Total GST'] : sum;
+            return TYPE_PATTERNS.MISSING_PR_CUMULATIVE.test(r.Type) ? sum + r['Total GST'] : sum;
         }, 0);
         const missing2bClaimed = filteredData.reduce((sum, r) => {
             if (!r || typeof r.Type !== 'string') return sum;
-            return (r.Type === 'Missing_2B_NowUploaded') ? sum + r['Total GST'] : sum;
+            return TYPE_PATTERNS.MISSING_2B_CLAIMED.test(r.Type) ? sum + r['Total GST'] : sum;
         }, 0);
         const missingPrClaimed = filteredData.reduce((sum, r) => {
             if (!r || typeof r.Type !== 'string') return sum;
-            return (r.Type.startsWith('Missing_in_PR_NowClaimed') || r.Type.startsWith('Missing_PR_NowClaimed')) ? sum + r['Total GST'] : sum;
+            return TYPE_PATTERNS.MISSING_PR_CLAIMED.test(r.Type) ? sum + r['Total GST'] : sum;
         }, 0);
         const totalRecovered = missing2bClaimed + missingPrClaimed;
         const totalMissing = missing2bCum + missingPrCum;
@@ -2468,18 +3070,41 @@ const Dashboard = function({
             data: {
                 labels: sortedMonths,
                 datasets: [
-                    { label: 'Missing GST', data: sortedMonths.map(m => monthly[m].missing), backgroundColor: '#EF4444' },
-                    { label: 'Recovered GST', data: sortedMonths.map(m => monthly[m].recovered), backgroundColor: '#10B981' }
+                    { 
+                        label: 'Missing GST', 
+                        data: sortedMonths.map(m => monthly[m].missing), 
+                        backgroundColor: '#EF4444',
+                        borderColor: '#EF4444',
+                        borderWidth: 0,
+                        borderRadius: 6
+                    },
+                    { 
+                        label: 'Recovered GST', 
+                        data: sortedMonths.map(m => monthly[m].recovered), 
+                        backgroundColor: '#10B981',
+                        borderColor: '#10B981',
+                        borderWidth: 0,
+                        borderRadius: 6
+                    }
                 ]
             },
-            options: { responsive: true, plugins: { title: { display: true, text: 'Monthly Missing vs. Recovered GST' } }, scales: { x: { stacked: true }, y: { stacked: true, ticks: { callback: (value) => formatCurrency(value, true) } } },
-            onClick: (evt, elements) => {
-                if (!elements.length) return;
-                const index = elements[0].index;
-                const month = sortedMonths[index];
-                handleMonthlyChartClick(month);
+            options: { 
+                responsive: true, 
+                plugins: { 
+                    title: { display: true, text: 'Monthly Missing vs. Recovered GST', font: { size: 14, weight: '600' } },
+                    legend: { display: true, position: 'top', labels: { padding: 15, usePointStyle: true, pointStyle: 'circle' } }
+                }, 
+                scales: { 
+                    x: { stacked: true, grid: { display: false } }, 
+                    y: { stacked: true, ticks: { callback: (value) => formatCurrency(value, true) }, grid: { color: 'rgba(0,0,0,0.05)' } } 
+                },
+                onClick: (evt, elements) => {
+                    if (!elements.length) return;
+                    const index = elements[0].index;
+                    const month = sortedMonths[index];
+                    handleMonthlyChartClick(month);
+                }
             }
-          }
         };
         
         const byCategory = {};
@@ -2496,16 +3121,35 @@ const Dashboard = function({
             type: 'doughnut',
             data: {
                 labels: categoryLabels,
-                datasets: [{ data: Object.values(byCategory), backgroundColor: ['#EF4444', '#F59E0B', '#3B82F6', '#8B5CF6', '#EC4899'] }]
+                datasets: [{ 
+                    data: Object.values(byCategory), 
+                    backgroundColor: [
+                        '#3B82F6',  // Blue
+                        '#10B981',  // Green
+                        '#F59E0B',  // Amber
+                        '#EF4444',  // Red
+                        '#8B5CF6',  // Purple
+                        '#EC4899',  // Pink
+                        '#06B6D4'   // Cyan
+                    ],
+                    borderColor: '#ffffff',
+                    borderWidth: 3
+                }]
             },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Missing GST by Category' } },
-            onClick: (evt, elements) => {
-                if (!elements.length) return;
-                const index = elements[0].index;
-                const tag = categoryLabels[index];
-                handleCategoryChartClick(tag);
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                plugins: { 
+                    title: { display: true, text: 'Missing GST by Category', font: { size: 14, weight: '600' } },
+                    legend: { display: true, position: 'right', labels: { padding: 12, usePointStyle: true, pointStyle: 'circle' } }
+                },
+                onClick: (evt, elements) => {
+                    if (!elements.length) return;
+                    const index = elements[0].index;
+                    const tag = categoryLabels[index];
+                    handleCategoryChartClick(tag);
+                }
             }
-          }
         };
 
         const bySupplier = {};
@@ -2524,16 +3168,30 @@ const Dashboard = function({
             type: 'bar',
             data: {
                 labels: topSuppliers.map(s => s.supplier),
-                datasets: [{ label: 'Missing GST', data: topSuppliers.map(s => s.gst), backgroundColor: '#4F46E5' }]
+                datasets: [{ 
+                    label: 'Missing GST', 
+                    data: topSuppliers.map(s => s.gst), 
+                    backgroundColor: '#4F46E5',
+                    borderColor: '#4F46E5',
+                    borderWidth: 0,
+                    borderRadius: 6
+                }]
             },
             options: {
                 indexAxis: 'y',
                 responsive: true,
                 plugins: {
-                    title: { display: true, text: 'Top 10 Suppliers by Missing GST' }
+                    title: { display: true, text: 'Top 10 Suppliers by Missing GST', font: { size: 14, weight: '600' } },
+                    legend: { display: false }
                 },
                 scales: {
-                    x: { ticks: { callback: (value) => formatCurrency(value, true) } }
+                    x: { 
+                        ticks: { callback: (value) => formatCurrency(value, true) },
+                        grid: { color: 'rgba(0,0,0,0.05)' }
+                    },
+                    y: {
+                        grid: { display: false }
+                    }
                 },
                 onClick: (evt, elements) => {
                     if (!elements.length) return;
@@ -2566,7 +3224,7 @@ const Dashboard = function({
 
         return e('div', { className: 'relative', ref: wrapperRef },
             e(Button, { onClick: () => setIsOpen(!isOpen), variant: 'secondary', icon: e(Icons.BookmarkIcon, { className: 'h-4 w-4' }) }, 'Views'),
-            isOpen && e('div', { className: 'absolute z-30 mt-2 w-56 rounded-md shadow-lg bg-white dark:bg-slate-800 ring-1 ring-black ring-opacity-5 right-0' },
+            isOpen && e('div', { className: 'glass-dropdown absolute z-30 mt-2 w-56 rounded-lg right-0' },
                 e('div', { className: 'py-1', role: 'menu' },
                     e('button', { onClick: handleSave, className: 'w-full text-left block px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700' }, 'Save current view...'),
                     Object.keys(savedViews).length > 0 && e('div', { className: 'border-t border-slate-200 dark:border-slate-700 my-1' }),
@@ -2581,36 +3239,170 @@ const Dashboard = function({
         );
     };
     
-    const Header = () => e('header', { className: 'bg-white dark:bg-slate-800 shadow-sm w-full p-3' },
-        e('div', { className: 'max-w-screen-2xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4' },
-            e('div', { className: 'flex items-center' },
-                e('h1', { className: 'text-xl font-bold text-primary-dark dark:text-primary-light shrink-0' }, 'GST Reconciliation Dashboard')
+    const getPageTitle = () => {
+        const titles = {
+            dashboard: 'Dashboard Overview',
+            compliance: 'Compliance Monitoring',
+            transactions: 'Transaction Analysis',
+            reconciliation: 'GST Reconciliation',
+            suppliers: 'Supplier Management',
+            validation: 'Books Validation',
+            mailing: 'Mailing List'
+        };
+        return titles[activeTab] || 'Dashboard';
+    };
+    
+    const TopBar = () => e('header', { className: 'bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-6 py-4 sticky top-0 z-30' },
+        e('div', { className: 'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4' },
+            e('div', null,
+                e('h1', { className: 'text-2xl font-bold text-gray-900 dark:text-gray-100' }, getPageTitle()),
+                e('div', { className: 'flex items-center gap-2 mt-1 text-sm text-gray-500 dark:text-gray-400' },
+                    e('span', null, 'Filters:'),
+                    filters.company.length > 0 && e('span', { className: 'badge badge-primary' }, `${filters.company.length} Companies`),
+                    filters.financialYear.length > 0 && e('span', { className: 'badge badge-primary' }, `${filters.financialYear.length} FY`),
+                    filters.month.length > 0 && e('span', { className: 'badge badge-primary' }, `${filters.month.length} Months`),
+                    (filters.company.length === 0 && filters.financialYear.length === 0 && filters.month.length === 0) && e('span', null, 'All Data')
+                )
             ),
-            e('div', { className: 'flex flex-wrap justify-center md:justify-end gap-3 w-full items-center' },
+            e('div', { className: 'flex flex-wrap gap-2 items-center' },
                 e(MultiSelect, { label: 'Company', values: filters.company, options: slicerOptions.companies, onChange: (v) => setFilters(f => ({...f, company: v})), className: 'w-40' }),
                 e(MultiSelect, { label: 'FY', values: filters.financialYear, options: slicerOptions.financialYears, onChange: (v) => setFilters(f => ({...f, financialYear: v})), className: 'w-28' }),
                 e(MultiSelect, { label: 'Month', values: filters.month, options: slicerOptions.months, onChange: (v) => setFilters(f => ({...f, month: v})), className: 'w-32' }),
-                e(MultiSelect, { label: 'Tag (Type)', values: filters.tag, options: slicerOptions.tags, onChange: (v) => setFilters(f => ({...f, tag: v})), className: 'w-48' }),
-                e(SavedViewsManager, null),
-                e(Button, { onClick: toggleTheme, variant: 'ghost', className: 'p-2' }, theme === 'light' ? e(Icons.MoonIcon, { className: 'h-5 w-5' }) : e(Icons.SunIcon, { className: 'h-5 w-5' })),
-                e(Button, { onClick: onNavigateToHome, variant: 'secondary', icon: e(Icons.HomeIcon, { className: 'h-5 w-5' }) }, 'Home'),
-                e(Button, { onClick: clearAllData, variant: 'danger-ghost', icon: e(Icons.TrashIcon, { className: 'w-4 h-4' }) }, 'Clear')
+                e(MultiSelect, { label: 'Tag', values: filters.tag, options: slicerOptions.tags, onChange: (v) => setFilters(f => ({...f, tag: v})), className: 'w-36' }),
+                e(SavedViewsManager, null)
             )
         )
     );
     
-    const tabs = ['KPIs', 'Reports', 'Transactions', 'Suppliers', 'Mailing List', 'Validate with Books'];
-    const Navigation = () => e('nav', { className: 'bg-white dark:bg-slate-800 w-full shadow-sm border-b dark:border-slate-700' },
-        e('div', { className: 'max-w-screen-2xl mx-auto flex justify-start px-2 text-sm' },
-            tabs.map(tab => e('button', {
-                key: tab,
-                onClick: () => setActiveTab(tab),
-                className: `py-3 px-4 font-medium border-b-2 transition-colors ${activeTab === tab ? 'border-primary text-primary' : 'border-transparent text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`
-            }, tab))
+    const navigationItems = [
+        { id: 'dashboard', label: 'Dashboard', icon: Icons.HomeIcon, description: 'Overview & key metrics' },
+        { id: 'compliance', label: 'Compliance', icon: Icons.DocumentCheckIcon, description: 'Reports & compliance status' },
+        { id: 'transactions', label: 'Transactions', icon: Icons.ReceiptIcon, description: 'Transaction analysis' },
+        { id: 'reconciliation', label: 'Reconciliation', icon: Icons.CheckCircleIcon, description: 'Missing GST tracking' },
+        { id: 'suppliers', label: 'Suppliers', icon: Icons.BuildingOfficeIcon, description: 'Supplier management' },
+        { id: 'validation', label: 'Books Validation', icon: Icons.DocumentTextIcon, description: 'Validate with books' },
+        { id: 'mailing', label: 'Mailing List', icon: Icons.EnvelopeIcon, description: 'Email management' }
+    ];
+    
+    const Sidebar = () => e('aside', { className: 'w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 h-screen sticky top-0 flex flex-col' },
+        e('div', { className: 'p-6 border-b border-gray-200 dark:border-gray-800' },
+            e('div', { className: 'flex items-center gap-3' },
+                e('div', { className: 'h-10 w-10 rounded-lg bg-gradient-to-br from-primary-600 to-primary-700 flex items-center justify-center text-white font-bold text-lg shadow-lg' }, 'G'),
+                e('div', null,
+                    e('h2', { className: 'text-lg font-bold text-gray-900 dark:text-gray-100' }, 'GST Portal'),
+                    e('p', { className: 'text-xs text-gray-500 dark:text-gray-400' }, 'Reconciliation System')
+                )
+            )
+        ),
+        e('nav', { className: 'flex-1 overflow-y-auto p-4' },
+            e('div', { className: 'space-y-1' },
+                navigationItems.map(item => {
+                    const isActive = activeTab === item.id;
+                    return e('button', {
+                        key: item.id,
+                        onClick: () => setActiveTab(item.id),
+                        className: `w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                            isActive 
+                                ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400' 
+                                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                        }`
+                    },
+                        e(item.icon, { className: 'h-5 w-5 flex-shrink-0' }),
+                        e('div', { className: 'flex-1 text-left' },
+                            e('div', null, item.label),
+                            !isActive && e('div', { className: 'text-xs text-gray-500 dark:text-gray-400 mt-0.5' }, item.description)
+                        )
+                    );
+                })
+            )
+        ),
+        e('div', { className: 'p-4 border-t border-gray-200 dark:border-gray-800 space-y-2' },
+            e(Button, { onClick: toggleTheme, variant: 'ghost', className: 'w-full justify-start' }, 
+                theme === 'light' ? e(Icons.MoonIcon, { className: 'h-5 w-5 mr-2' }) : e(Icons.SunIcon, { className: 'h-5 w-5 mr-2' }),
+                theme === 'light' ? 'Dark Mode' : 'Light Mode'
+            ),
+            e(Button, { onClick: onNavigateToHome, variant: 'secondary', className: 'w-full', icon: e(Icons.HomeIcon, { className: 'h-5 w-5' }) }, 'Home'),
+            e(Button, { onClick: clearAllData, variant: 'danger-ghost', className: 'w-full', icon: e(Icons.TrashIcon, { className: 'w-4 h-4' }) }, 'Clear Data')
         )
     );
     
-    const KpiPage = () => e('div', { className: 'space-y-6' },
+    const DashboardPage = () => e('div', { className: 'space-y-6' },
+        e('div', { className: 'grid grid-cols-1 lg:grid-cols-3 gap-6' },
+            e('div', { className: 'lg:col-span-2 space-y-6' },
+                e('div', { className: 'pro-card p-6' },
+                    e('h2', { className: 'text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4' }, 'Executive Summary'),
+                    e('div', { className: 'grid grid-cols-1 md:grid-cols-2 gap-4' },
+                        e('div', { className: 'p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border-l-4 border-blue-500' },
+                            e('div', { className: 'text-sm font-medium text-blue-600 dark:text-blue-400' }, 'Total Missing GST'),
+                            e('div', { className: 'text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1' }, formatCurrency(kpiData.missing2bCum + kpiData.missingPrCum)),
+                            e('div', { className: 'text-xs text-gray-600 dark:text-gray-400 mt-1' }, 'Requires immediate attention')
+                        ),
+                        e('div', { className: 'p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border-l-4 border-green-500' },
+                            e('div', { className: 'text-sm font-medium text-green-600 dark:text-green-400' }, 'Recovery Success Rate'),
+                            e('div', { className: 'text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1' }, formatPercent(kpiData.successRate)),
+                            e('div', { className: 'text-xs text-gray-600 dark:text-gray-400 mt-1' }, `${formatCurrency(kpiData.missing2bClaimed + kpiData.missingPrClaimed)} recovered`)
+                        ),
+                        e('div', { className: 'p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border-l-4 border-amber-500' },
+                            e('div', { className: 'text-sm font-medium text-amber-600 dark:text-amber-400' }, 'Active Transactions'),
+                            e('div', { className: 'text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1' }, filteredData.length.toLocaleString()),
+                            e('div', { className: 'text-xs text-gray-600 dark:text-gray-400 mt-1' }, 'Total records in system')
+                        ),
+                        e('div', { className: 'p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border-l-4 border-purple-500' },
+                            e('div', { className: 'text-sm font-medium text-purple-600 dark:text-purple-400' }, 'Unique Suppliers'),
+                            e('div', { className: 'text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1' }, [...new Set(filteredData.map(r => r['Supplier Name']))].length.toLocaleString()),
+                            e('div', { className: 'text-xs text-gray-600 dark:text-gray-400 mt-1' }, 'Active supplier base')
+                        )
+                    )
+                ),
+                e('div', { className: 'pro-card p-6' },
+                    e('h3', { className: 'text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4' }, 'Missing GST Trend'),
+                    chartData.monthly ? e(ChartComponent, { chartConfig: chartData.monthly }) : e('div', { className: 'text-gray-500' }, 'No data available')
+                )
+            ),
+            e('div', { className: 'space-y-6' },
+                e('div', { className: 'pro-card p-6' },
+                    e('h3', { className: 'text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4' }, 'Quick Actions'),
+                    e('div', { className: 'space-y-3' },
+                        e('button', { onClick: () => setActiveTab('reconciliation'), className: 'w-full text-left p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors' },
+                            e('div', { className: 'flex items-center gap-3' },
+                                e(Icons.DocumentMinusIcon, { className: 'h-5 w-5 text-red-500' }),
+                                e('div', null,
+                                    e('div', { className: 'font-medium text-gray-900 dark:text-gray-100' }, 'View Missing GST'),
+                                    e('div', { className: 'text-xs text-gray-500' }, 'Analyze reconciliation gaps')
+                                )
+                            )
+                        ),
+                        e('button', { onClick: () => setActiveTab('compliance'), className: 'w-full text-left p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors' },
+                            e('div', { className: 'flex items-center gap-3' },
+                                e(Icons.DocumentCheckIcon, { className: 'h-5 w-5 text-green-500' }),
+                                e('div', null,
+                                    e('div', { className: 'font-medium text-gray-900 dark:text-gray-100' }, 'Compliance Reports'),
+                                    e('div', { className: 'text-xs text-gray-500' }, 'View filing status')
+                                )
+                            )
+                        ),
+                        e('button', { onClick: () => setActiveTab('validation'), className: 'w-full text-left p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors' },
+                            e('div', { className: 'flex items-center gap-3' },
+                                e(Icons.DocumentTextIcon, { className: 'h-5 w-5 text-blue-500' }),
+                                e('div', null,
+                                    e('div', { className: 'font-medium text-gray-900 dark:text-gray-100' }, 'Validate Books'),
+                                    e('div', { className: 'text-xs text-gray-500' }, 'Match with accounting records')
+                                )
+                            )
+                        )
+                    )
+                ),
+                e('div', { className: 'pro-card p-6' },
+                    e('h3', { className: 'text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4' }, 'Category Breakdown'),
+                    e('div', { className: 'h-80' },
+                        chartData.byCategory ? e(ChartComponent, { chartConfig: chartData.byCategory }) : e('div', { className: 'flex items-center justify-center h-full text-gray-500' }, 'No data available')
+                    )
+                )
+            )
+        )
+    );
+    
+    const ReconciliationPage = () => e('div', { className: 'space-y-6' },
       e('div', { className: 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6' },
         e(KpiCard, { title: "Missing 2B Cum", value: formatCurrency(kpiData.missing2bCum), icon: e(Icons.DocumentMinusIcon, { className: 'h-6 w-6 text-red-500' }), color: 'red', onClick: () => onKpiClick('Missing 2B') }),
         e(KpiCard, { title: "Missing PR Cum", value: formatCurrency(kpiData.missingPrCum), icon: e(Icons.DocumentMinusIcon, { className: 'h-6 w-6 text-yellow-500' }), color: 'yellow', onClick: () => onKpiClick('Missing in PR') }),
@@ -2620,35 +3412,38 @@ const Dashboard = function({
         e(KpiCard, { title: "Success Rate", value: formatPercent(kpiData.successRate), subValue: "Total Recovered", icon: e(Icons.TrendingUpIcon, { className: 'h-6 w-6 text-green-500' }), color: 'green' })
       ),
       e('div', { className: 'grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6' },
-        e('div', { className: 'xl:col-span-2 bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md border dark:border-slate-700' },
+        e('div', { className: 'xl:col-span-2 pro-card p-6' },
             chartData.monthly ? e(ChartComponent, { chartConfig: chartData.monthly }) : e('div', null, 'No data for monthly chart.')
         ),
-        e('div', { className: 'bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md border dark:border-slate-700 min-h-[300px]' },
+        e('div', { className: 'pro-card p-6 min-h-[300px]' },
             chartData.byCategory ? e(ChartComponent, { chartConfig: chartData.byCategory }) : e('div', null, 'No data for category chart.')
         )
       ),
-      e('div', { className: 'bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md border dark:border-slate-700' },
+      e('div', { className: 'pro-card p-6' },
           chartData.topSuppliers ? e(ChartComponent, { chartConfig: chartData.topSuppliers }) : e('div', null, 'No data for top suppliers chart.')
       )
     );
 
     const renderActiveTab = () => {
         switch(activeTab) {
-            case 'KPIs': return e(KpiPage, null);
-            case 'Reports': return e(ReportsTab, { initialData: reports, onDataChange: updateReports });
-            case 'Transactions': return e(TransactionsPage, { data: filteredData, actionState: actionState, updateAction: updateAction, updateMultipleActions: updateMultipleActions });
-            case 'Suppliers': return e(SuppliersPage, { data: filteredData, assignmentState: assignmentState, updateAssignment: updateAssignment });
-            case 'Mailing List': return e(MailingListPage, { data: filteredData, actionState: actionState, assignmentState: assignmentState, setPrintModalData: setPrintModalData });
-            case 'Validate with Books': return e(ValidationPage, { allData, validationBooks, onValidateWithBooks });
-            default: return e(KpiPage, null);
+            case 'dashboard': return e(DashboardPage, null);
+            case 'compliance': return e(ReportsTab, { initialData: reports, onDataChange: updateReports });
+            case 'transactions': return e(TransactionsPage, { data: filteredData, actionState: actionState, updateAction: updateAction, updateMultipleActions: updateMultipleActions });
+            case 'reconciliation': return e(ReconciliationPage, null);
+            case 'suppliers': return e(SuppliersPage, { data: filteredData, assignmentState: assignmentState, updateAssignment: updateAssignment });
+            case 'validation': return e(ValidationPage, { allData, validationBooks, onValidateWithBooks });
+            case 'mailing': return e(MailingListPage, { data: filteredData, actionState: actionState, assignmentState: assignmentState, setPrintModalData: setPrintModalData });
+            default: return e(DashboardPage, null);
         }
     };
 
-    return e('div', { className: 'min-h-screen flex flex-col' },
-        e(Header, null),
-        e(Navigation, null),
-        e('main', { className: 'flex-grow p-4 sm:p-6 max-w-screen-2xl mx-auto w-full' },
-            e(ErrorBoundary, { message: 'Failed to load content for this tab.' }, renderActiveTab())
+    return e('div', { className: 'min-h-screen flex bg-gray-50 dark:bg-gray-900' },
+        e(Sidebar, null),
+        e('div', { className: 'flex-1 flex flex-col overflow-hidden' },
+            e(TopBar, null),
+            e('main', { className: 'flex-1 overflow-y-auto p-6' },
+                e(ErrorBoundary, { message: 'Failed to load content for this page.' }, renderActiveTab())
+            )
         )
     );
 };
@@ -2665,7 +3460,7 @@ const App = function() {
     assignmentState: {},
     validationBooks: [],
     reports: [],
-    activeTab: 'KPIs',
+    activeTab: 'dashboard',
     filters: {
       company: [],
       financialYear: [],
@@ -2837,7 +3632,10 @@ const App = function() {
             return null;
           };
           
-          // Build lookup with normalized keys
+          // Build two separate lookups to prevent double-counting
+          const bookRowsLookupExact = new Map();  // With GSTIN
+          const bookRowsLookupFuzzy = new Map();  // Without GSTIN
+          
           book.data.forEach(row => {
               const docNum = getCol(row, ['Voucher Ref. No.', 'Document Number', 'Doc No', 'Invoice No']);
               const gstin = getCol(row, ['GSTIN/UIN', 'GSTIN', 'Supplier GSTIN']);
@@ -2847,13 +3645,16 @@ const App = function() {
               const normalizedGstin = String(gstin || '').trim();
               
               if (normalizedDocNum) {
-                  const key = `${book.companyName}|${normalizedDocNum}|${normalizedGstin}`;
-                  bookRowsLookup.set(key, row);
+                  // Store with GSTIN for exact matching
+                  if (normalizedGstin) {
+                      const keyExact = `${book.companyName}|${normalizedDocNum}|${normalizedGstin}`;
+                      bookRowsLookupExact.set(keyExact, row);
+                  }
                   
-                  // Also add key without GSTIN for fuzzy matching
-                  const keyWithoutGstin = `${book.companyName}|${normalizedDocNum}|`;
-                  if (!bookRowsLookup.has(keyWithoutGstin)) {
-                      bookRowsLookup.set(keyWithoutGstin, row);
+                  // Store without GSTIN only if not already in exact lookup
+                  const keyFuzzy = `${book.companyName}|${normalizedDocNum}`;
+                  if (!bookRowsLookupFuzzy.has(keyFuzzy)) {
+                      bookRowsLookupFuzzy.set(keyFuzzy, row);
                   }
               }
           });
@@ -2861,27 +3662,40 @@ const App = function() {
           const newActionState = {...appState.actionState};
           let matchCount = 0;
           let totalCandidates = 0;
+          const matchedBookKeys = new Set(); // Track which book entries we've matched
           
           appState.allData.forEach(row => {
-              if (row && typeof row.Type === 'string' && row.Type.startsWith('Missing_in_PR')) {
+              if (row && typeof row.Type === 'string' && TYPE_PATTERNS.MISSING_PR_ANY.test(row.Type)) {
                   totalCandidates++;
                   
                   // Normalize main data values
                   const normalizedDocNum = String(row['Document Number (2B)'] || '').trim();
                   const normalizedGstin = String(row['Supplier GSTIN (2B)'] || '').trim();
                   
-                  // Try exact match first
-                  let key = `${row['Company Name']}|${normalizedDocNum}|${normalizedGstin}`;
-                  let matched = bookRowsLookup.has(key);
+                  let matched = false;
+                  let usedKey = null;
                   
-                  // If no exact match, try without GSTIN
-                  if (!matched && normalizedDocNum) {
-                      key = `${row['Company Name']}|${normalizedDocNum}|`;
-                      matched = bookRowsLookup.has(key);
+                  // Try exact match first (with GSTIN)
+                  if (normalizedGstin && normalizedDocNum) {
+                      const keyExact = `${row['Company Name']}|${normalizedDocNum}|${normalizedGstin}`;
+                      if (bookRowsLookupExact.has(keyExact) && !matchedBookKeys.has(keyExact)) {
+                          matched = true;
+                          usedKey = keyExact;
+                      }
                   }
                   
-                  if (matched) {
+                  // If no exact match, try fuzzy match (without GSTIN)
+                  if (!matched && normalizedDocNum) {
+                      const keyFuzzy = `${row['Company Name']}|${normalizedDocNum}`;
+                      if (bookRowsLookupFuzzy.has(keyFuzzy) && !matchedBookKeys.has(keyFuzzy)) {
+                          matched = true;
+                          usedKey = keyFuzzy;
+                      }
+                  }
+                  
+                  if (matched && usedKey) {
                       matchCount++;
+                      matchedBookKeys.add(usedKey); // Mark this book entry as matched
                       const current = newActionState[row.id] || {};
                       newActionState[row.id] = typeof current === 'object' ? { ...current, action: 'Accounted' } : { action: 'Accounted' };
                   }
@@ -2922,7 +3736,7 @@ const App = function() {
         tagFilter = slicerOptions.tags.filter(t => t.startsWith('Missing_in_PR_NowClaimed') || t.startsWith('Missing_PR_NowClaimed'));
     }
     setFilters({ ...appState.filters, tag: tagFilter });
-    updateState({ activeTab: 'Transactions' });
+    updateState({ activeTab: 'transactions' });
   };
   
   if (!appState.isAuthenticated) {
